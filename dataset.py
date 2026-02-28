@@ -126,7 +126,7 @@ def collate_fn(batch):
     return tuple(zip(*batch))
 
 
-def create_dataloaders(data_dir, batch_size=BATCH_SIZE):
+def create_dataloaders(data_dir, batch_size=BATCH_SIZE, test_mode=False):
     """
     Reads trainval.txt / test.txt from *data_dir*, splits trainval into
     train/val, and returns three DataLoaders.
@@ -139,6 +139,11 @@ def create_dataloaders(data_dir, batch_size=BATCH_SIZE):
     train_lines, val_lines = train_test_split(
         trainval_lines, test_size=TEST_SPLIT, random_state=RANDOM_SEED,
     )
+    
+    if test_mode:
+        train_lines = train_lines[:80]
+        val_lines   = val_lines[:40]
+        test_lines  = test_lines[:40]
 
     train_dataset = PCBDefectDataset(train_lines, data_dir=data_dir,
                                      transforms=get_v2_transforms(train=True))

@@ -28,6 +28,8 @@ parser.add_argument('--batch_size', type=int, default=None,
                     help='Batch size (default: from config).')
 parser.add_argument('--output_dir', type=str, default=None,
                     help='Directory to save best model and logs.')
+parser.add_argument('--test_mode', action='store_true',
+                    help='Run in test mode (1 epoch, 80 train/40 val images, frequent logging).')
 args = parser.parse_args()
 
 # ─── Setup output directory ──────────────────────────────────────────────────
@@ -49,6 +51,10 @@ if args.epochs is not None:
     config.NUM_EPOCHS = args.epochs
 if args.batch_size is not None:
     config.BATCH_SIZE = args.batch_size
+
+if args.test_mode:
+    config.NUM_EPOCHS = 1
+
 
 # ─── Logging setup ──────────────────────────────────────────────────────────
 log_file = os.path.join(args.output_dir, f'train_{args.model}.log')
@@ -110,12 +116,14 @@ if args.model in PYTORCH_MODELS:
     print('\n>>> Loading dataset via PyTorch DataLoader...')
     train_loader, val_loader, test_loader = create_dataloaders(
         config.DATA_DIR, batch_size=config.BATCH_SIZE,
+        test_mode=args.test_mode
     )
     print(f'    Train: {len(train_loader.dataset)}  '
           f'Val: {len(val_loader.dataset)}  '
           f'Test: {len(test_loader.dataset)}')
 
     print('\n>>> Starting training...')
+    score_thresh = 0.1 if args.test_mode else config.SCORE_THRESHOLD
     history = train_model(
         model, train_loader, val_loader,
         num_epochs=config.NUM_EPOCHS,
@@ -123,6 +131,8 @@ if args.model in PYTORCH_MODELS:
         weight_decay=config.WEIGHT_DECAY,
         device=config.DEVICE,
         save_path=best_model_path,
+        test_mode=args.test_mode,
+        score_threshold=score_thresh,
     )
 
     # Save training history as JSON
@@ -138,7 +148,8 @@ if args.model in PYTORCH_MODELS:
     print('\n>>> Evaluating best model on test set...')
     model.load_state_dict(torch.load(best_model_path, map_location=config.DEVICE))
     model.to(config.DEVICE)
-    test_metrics = validate(model, test_loader, device=config.DEVICE)
+    test_metrics = validate(model, test_loader, device=config.DEVICE,
+                            score_threshold=score_thresh)
 
     print(f'    Test F1:        {test_metrics["f1"]:.4f}')
     print(f'    Test mIoU:      {test_metrics["miou"]:.4f}')

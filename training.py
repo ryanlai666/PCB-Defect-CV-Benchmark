@@ -67,8 +67,9 @@ def train_one_epoch(model, loader, optimizer, device=DEVICE, log_interval=10):
 
         # Log every log_interval batches
         if batch_idx % log_interval == 0 or batch_idx == n_batches:
-            avg_cls = running_cls / log_interval
-            avg_box = running_box / log_interval
+            batches_run = batch_idx % log_interval if batch_idx % log_interval != 0 else log_interval
+            avg_cls = running_cls / batches_run
+            avg_box = running_box / batches_run
             print(f"  [Batch {batch_idx:>4d}/{n_batches}] "
                   f"Cls Loss: {avg_cls:.4f} | Box Loss: {avg_box:.4f}")
             running_cls = 0.0
@@ -120,7 +121,9 @@ def train_model(model, train_loader, val_loader,
                 lr=LEARNING_RATE,
                 weight_decay=WEIGHT_DECAY,
                 device=DEVICE,
-                save_path=BEST_MODEL_PATH):
+                save_path=BEST_MODEL_PATH,
+                test_mode=False,
+                score_threshold=0.5):
     """
     Full training loop with cosine-annealing LR and best-model checkpointing.
     Returns a history dict for plotting.
@@ -141,7 +144,8 @@ def train_model(model, train_loader, val_loader,
 
     for epoch in range(num_epochs):
         # ── Train ──────────────────────────────────────────────────────
-        losses = train_one_epoch(model, train_loader, optimizer, device)
+        log_interval = 10 if test_mode else len(train_loader)
+        losses = train_one_epoch(model, train_loader, optimizer, device, log_interval=log_interval)
         scheduler.step()
 
         history['train_cls_loss'].append(losses['cls_loss'])
@@ -152,7 +156,7 @@ def train_model(model, train_loader, val_loader,
               f"Box Loss: {losses['box_loss']:.4f}")
 
         # ── Validate ───────────────────────────────────────────────────
-        metrics = validate(model, val_loader, device)
+        metrics = validate(model, val_loader, device, score_threshold=score_threshold)
         for key in ('f1', 'miou', 'precision', 'recall'):
             history[f'val_{key}'].append(metrics[key])
 
