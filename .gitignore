@@ -1,0 +1,30 @@
+# Datasets
+Bridge_Crack_Image/
+CrackForest/
+DeepPCB/
+Magnetic-Tile-Defect/
+archive.zip
+
+# Outputs, Logs, and Models
+logs/
+models/
+outputs/
+*.log
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual Environments
+venv/
+env/
+.env
+
+# Editor / IDE
+.vscode/
+.idea/
+.DS_Store
