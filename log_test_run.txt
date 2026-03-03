@@ -1,0 +1,5 @@
+usage: train_model.py [-h] --model
+                      {faster_rcnn,vit_det,vit_mamba,yolo26,sme_yolo,rt_detr}
+                      [--epochs EPOCHS] [--batch_size BATCH_SIZE]
+                      [--output_dir OUTPUT_DIR] [--test_mode]
+train_model.py: error: the following arguments are required: --model

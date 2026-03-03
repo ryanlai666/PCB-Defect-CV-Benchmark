@@ -19,8 +19,9 @@ import time
 # ─── Parse arguments first (before heavy imports) ────────────────────────────
 parser = argparse.ArgumentParser(description='Train a PCB defect detection model.')
 parser.add_argument('--model', type=str, required=True,
-                    choices=['faster_rcnn', 'vit_det', 'vit_mamba',
-                             'yolo26', 'sme_yolo', 'rt_detr'],
+                    choices=['faster_rcnn', 'faster_rcnn_ft', 'vit_det', 'vit_mamba',
+                             'yolo26', 'sme_yolo', 'rt_detr',
+                             'deimv2_l', 'deimv2_x'],
                     help='Model architecture to train.')
 parser.add_argument('--epochs', type=int, default=None,
                     help='Number of training epochs (default: from config).')
@@ -105,8 +106,9 @@ model = create_model(args.model, num_classes=config.NUM_CLASSES,
 print(f'    Model type: {type(model)}')
 
 # ─── Training ────────────────────────────────────────────────────────────────
-PYTORCH_MODELS = ('faster_rcnn', 'vit_det', 'vit_mamba')
+PYTORCH_MODELS = ('faster_rcnn', 'faster_rcnn_ft', 'vit_det', 'vit_mamba')
 ULTRALYTICS_MODELS = ('yolo26', 'sme_yolo', 'rt_detr')
+DEIMV2_MODELS = ('deimv2_l', 'deimv2_x')
 
 if args.model in PYTORCH_MODELS:
     # ── PyTorch training loop ────────────────────────────────────────────
@@ -219,6 +221,76 @@ elif args.model in ULTRALYTICS_MODELS:
     print('\n>>> Running final validation...')
     val_results = model.val(data=data_yaml)
     print(f'    Validation results: {val_results}')
+
+elif args.model in DEIMV2_MODELS:
+    # ── DEIMv2 subprocess training ───────────────────────────────────────
+    import subprocess
+
+    # Step 1: ensure DeepPCB dataset is converted to COCO format
+    coco_ann_dir = os.path.join(PROJECT_DIR, 'data', 'deeppcb_coco', 'annotations')
+    train_json   = os.path.join(coco_ann_dir, 'instances_train.json')
+    if not os.path.exists(train_json):
+        print('\n>>> Converting DeepPCB dataset to COCO format for DEIMv2...')
+        convert_script = os.path.join(PROJECT_DIR, 'scripts', 'convert_deeppcb_to_coco.py')
+        deeppcb_dir    = os.path.join(PROJECT_DIR, 'DeepPCB', 'PCBData')
+        out_dir        = os.path.join(PROJECT_DIR, 'data', 'deeppcb_coco')
+        ret = subprocess.run(
+            [sys.executable, convert_script,
+             '--deeppcb_dir', deeppcb_dir,
+             '--output_dir',  out_dir,
+             '--seed', '42'],
+            cwd=PROJECT_DIR,
+        )
+        if ret.returncode != 0:
+            print('ERROR: Dataset conversion failed.', file=sys.stderr)
+            sys.exit(ret.returncode)
+    else:
+        print(f'\n>>> COCO dataset already exists at: {coco_ann_dir}')
+
+    # Step 2: launch DEIMv2 training via torchrun
+    deimv2_dir    = os.path.join(PROJECT_DIR, 'DEIMv2')
+    train_script  = os.path.join(deimv2_dir, 'train.py')
+    config_path   = model.config_path  # set by wrapper
+
+    # Determine GPU count
+    import torch as _torch
+    n_gpus = max(1, _torch.cuda.device_count())
+
+    epochs_to_use = config.NUM_EPOCHS if args.epochs is not None else None
+
+    cmd = [
+        'torchrun',
+        f'--nproc_per_node={n_gpus}',
+        '--master_port=7779',
+        train_script,
+        '-c', str(config_path),
+        '--use-amp',
+        '--seed=0',
+    ]
+
+    # Override output dir so checkpoints land in our standard location
+    cmd += [f'--output-dir={args.output_dir}']
+
+    if args.test_mode:
+        # In test mode: 1 epoch, override test via cmd option when supported,
+        # else just note the limitation
+        print('\n>>> [test_mode] DEIMv2 will run 1 epoch (override via config).')
+        # DEIMv2 supports --epoches override since 2025.9
+        cmd += ['--epoches=1']
+
+    print(f'\n>>> Starting DEIMv2 training: {model.label}')
+    print(f'    Config  : {config_path}')
+    print(f'    GPUs    : {n_gpus}')
+    print(f'    Command : {" ".join(cmd)}')
+
+    ret = subprocess.run(cmd, cwd=deimv2_dir)
+
+    if ret.returncode != 0:
+        print(f'ERROR: DEIMv2 training failed with exit code {ret.returncode}.',
+              file=sys.stderr)
+        sys.exit(ret.returncode)
+
+    print(f'\n>>> DEIMv2 training complete. Checkpoints in: {args.output_dir}')
 
 else:
     print(f'ERROR: Unknown model type: {args.model}')

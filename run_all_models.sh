@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# run_all_models.sh — Train all 5 PCB defect detection models sequentially
+# run_all_models.sh — Train all PCB defect detection models sequentially
+# (faster_rcnn / faster_rcnn_ft excluded — using pre-trained Colab checkpoint)
 # (vit_mamba excluded — mambavision cannot compile on this server)
 #
 # Usage:
-#   bash run_all_models.sh              # train all 5 models
-#   bash run_all_models.sh faster_rcnn  # train only faster_rcnn
-#   bash run_all_models.sh vit_det rt_detr  # train specific models
+#   bash run_all_models.sh                     # train all models (full)
+#   bash run_all_models.sh --test              # test mode: all models, 1 epoch, 80/40/40 images
+#   bash run_all_models.sh faster_rcnn_ft      # run faster_rcnn_ft only
+#   bash run_all_models.sh --test vit_det      # test mode: only vit_det
 #
 # Environment: conda activate pcb
 # ==============================================================================
@@ -25,14 +27,32 @@ LOG_DIR="${PROJECT_DIR}/logs"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 MASTER_LOG="${LOG_DIR}/run_all_${TIMESTAMP}.log"
 
-# All available models
-ALL_MODELS=(faster_rcnn vit_det yolo26 sme_yolo rt_detr)
+# All available models (faster_rcnn / faster_rcnn_ft skipped: using Colab checkpoint)
+# DEIMv2-L/X: use DEIMv2/train.py via torchrun (subprocess) — see train_model.py
+ALL_MODELS=( rt_detr vit_det deimv2_l deimv2_x)  # yolo26 sme_yolo
 
 # ─── Parse arguments ────────────────────────────────────────────────────────
-if [ $# -gt 0 ]; then
-    MODELS=("$@")
+TEST_MODE=0
+TEST_MODE_FLAG=""
+MODEL_ARGS=()
+
+for arg in "$@"; do
+    if [ "${arg}" = "--test" ]; then
+        TEST_MODE=1
+    else
+        MODEL_ARGS+=("${arg}")
+    fi
+done
+
+if [ ${#MODEL_ARGS[@]} -gt 0 ]; then
+    MODELS=("${MODEL_ARGS[@]}")
 else
     MODELS=("${ALL_MODELS[@]}")
+fi
+
+if [ ${TEST_MODE} -eq 1 ]; then
+    TEST_MODE_FLAG="--test_mode"
+    EPOCHS=1
 fi
 
 # ─── Setup directories ──────────────────────────────────────────────────────
@@ -60,10 +80,13 @@ set -u
 
 log_separator
 log "  PCB Defect Detection — Sequential Model Training"
+if [ ${TEST_MODE} -eq 1 ]; then
+log "  *** TEST MODE: 1 epoch, 80 train / 40 val / 40 test images ***"
+fi
 log "  Timestamp:    ${TIMESTAMP}"
 log "  Conda Env:    ${CONDA_ENV}"
 log "  Python:       $(which python)"
-log "  PyTorch:      $(python -c 'import torch; print(torch.__version__)')"
+log "  PyTorch:      $(python -c 'import torch; print(torch.__version__)')" 
 log "  CUDA:         $(python -c 'import torch; print(torch.cuda.is_available())')"
 log "  GPU:          $(python -c 'import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None")')"
 log "  Epochs:       ${EPOCHS}"
@@ -118,6 +141,7 @@ for MODEL_NAME in "${MODELS[@]}"; do
         --epochs "${EPOCHS}" \
         --batch_size "${BATCH_SIZE}" \
         --output_dir "${MODEL_OUTPUT_DIR}" \
+        ${TEST_MODE_FLAG} \
         2>&1 | tee "${MODEL_LOG}" | tee -a "${MASTER_LOG}"
     EXIT_CODE=$?
     set -e
