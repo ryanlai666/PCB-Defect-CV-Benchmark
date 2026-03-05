@@ -4,6 +4,7 @@ YOLO / RT-DETR models use Ultralytics' built-in trainer instead.
 """
 
 import math
+import os
 import sys
 import torch
 
@@ -123,10 +124,21 @@ def train_model(model, train_loader, val_loader,
                 device=DEVICE,
                 save_path=BEST_MODEL_PATH,
                 test_mode=False,
-                score_threshold=0.5):
+                score_threshold=0.5,
+                resume_path=None,
+                start_epoch=0):
     """
     Full training loop with cosine-annealing LR and best-model checkpointing.
     Returns a history dict for plotting.
+
+    Args:
+        resume_path: Path to a checkpoint file to resume from.
+                     The checkpoint should contain 'model_state_dict',
+                     'optimizer_state_dict', 'scheduler_state_dict',
+                     'epoch', 'best_f1', and optionally 'history'.
+        start_epoch: Epoch number to start from (0-indexed). Only used
+                     if resume_path is None. When resume_path is given,
+                     start_epoch is loaded from the checkpoint.
     """
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr,
@@ -142,7 +154,31 @@ def train_model(model, train_loader, val_loader,
     }
     best_f1 = 0.0
 
-    for epoch in range(num_epochs):
+    # ── Resume from checkpoint ─────────────────────────────────────────
+    if resume_path and os.path.exists(resume_path):
+        print(f'>>> Resuming from checkpoint: {resume_path}')
+        ckpt = torch.load(resume_path, map_location=device)
+
+        # Support both new-style (full checkpoint) and old-style (state_dict only)
+        if 'model_state_dict' in ckpt:
+            model.load_state_dict(ckpt['model_state_dict'])
+            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+            scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+            start_epoch = ckpt['epoch'] + 1  # resume from next epoch
+            best_f1 = ckpt.get('best_f1', 0.0)
+            if 'history' in ckpt:
+                history = ckpt['history']
+            print(f'    Resumed at epoch {start_epoch}, best_f1={best_f1:.4f}')
+        else:
+            # Old-style checkpoint: just model weights
+            model.load_state_dict(ckpt)
+            print(f'    Loaded model weights (old-style checkpoint)')
+            print(f'    Starting fresh optimizer/scheduler from epoch {start_epoch}')
+            # Advance scheduler to match start_epoch
+            for _ in range(start_epoch):
+                scheduler.step()
+
+    for epoch in range(start_epoch, num_epochs):
         # ── Train ──────────────────────────────────────────────────────
         log_interval = 10 if test_mode else len(train_loader)
         losses = train_one_epoch(model, train_loader, optimizer, device, log_interval=log_interval)
@@ -164,11 +200,22 @@ def train_model(model, train_loader, val_loader,
               f"F1: {metrics['f1']:.4f} | mIoU: {metrics['miou']:.4f} | "
               f"P: {metrics['precision']:.4f} | R: {metrics['recall']:.4f}")
 
-        # ── Checkpoint ─────────────────────────────────────────────────
+        # ── Checkpoint (full state for resume) ─────────────────────────
         if metrics['f1'] > best_f1:
             best_f1 = metrics['f1']
             print(f"--> New best model! F1: {best_f1:.4f}  Saving '{save_path}'")
             torch.save(model.state_dict(), save_path)
+
+        # Always save a resumable checkpoint (last)
+        last_ckpt_path = save_path.replace('best_', 'last_ckpt_')
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'epoch': epoch,
+            'best_f1': best_f1,
+            'history': history,
+        }, last_ckpt_path)
 
     print('Training Complete!')
     return history

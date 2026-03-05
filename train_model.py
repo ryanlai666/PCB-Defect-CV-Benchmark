@@ -31,6 +31,11 @@ parser.add_argument('--output_dir', type=str, default=None,
                     help='Directory to save best model and logs.')
 parser.add_argument('--test_mode', action='store_true',
                     help='Run in test mode (1 epoch, 80 train/40 val images, frequent logging).')
+parser.add_argument('--resume', action='store_true',
+                    help='Resume training from last checkpoint. '
+                         'For PyTorch models: loads last_ckpt_<model>.pth or best_<model>.pth. '
+                         'For Ultralytics: resumes from last.pt. '
+                         'For DEIMv2: resumes from last.pth.')
 args = parser.parse_args()
 
 # ─── Setup output directory ──────────────────────────────────────────────────
@@ -63,8 +68,9 @@ log_file = os.path.join(args.output_dir, f'train_{args.model}.log')
 
 class Tee:
     """Duplicate stdout/stderr to a log file."""
-    def __init__(self, log_path, stream):
-        self.file = open(log_path, 'w', buffering=1)
+    def __init__(self, log_path, stream, append=False):
+        mode = 'a' if append else 'w'
+        self.file = open(log_path, mode, buffering=1)
         self.stream = stream
 
     def write(self, data):
@@ -79,8 +85,8 @@ class Tee:
         self.file.close()
 
 
-tee_stdout = Tee(log_file, sys.stdout)
-tee_stderr = Tee(log_file.replace('.log', '_stderr.log'), sys.stderr)
+tee_stdout = Tee(log_file, sys.stdout, append=args.resume)
+tee_stderr = Tee(log_file.replace('.log', '_stderr.log'), sys.stderr, append=args.resume)
 sys.stdout = tee_stdout
 sys.stderr = tee_stderr
 
@@ -88,6 +94,8 @@ sys.stderr = tee_stderr
 # ─── Banner ──────────────────────────────────────────────────────────────────
 print('=' * 70)
 print(f'  PCB Defect Detection — Training: {args.model}')
+if args.resume:
+    print(f'  *** RESUME MODE — continuing from last checkpoint ***')
 print(f'  Started at: {time.strftime("%Y-%m-%d %H:%M:%S")}')
 print(f'  Device:     {config.DEVICE}')
 print(f'  Epochs:     {config.NUM_EPOCHS}')
@@ -126,6 +134,30 @@ if args.model in PYTORCH_MODELS:
 
     print('\n>>> Starting training...')
     score_thresh = 0.1 if args.test_mode else config.SCORE_THRESHOLD
+
+    # Determine resume checkpoint for PyTorch models
+    resume_ckpt = None
+    start_epoch = 0
+    if args.resume:
+        # Prefer the full-state checkpoint, fall back to best model weights
+        last_ckpt = os.path.join(args.output_dir, f'last_ckpt_{args.model}.pth')
+        if os.path.exists(last_ckpt):
+            resume_ckpt = last_ckpt
+            print(f'    Will resume from full checkpoint: {last_ckpt}')
+        elif os.path.exists(best_model_path):
+            resume_ckpt = best_model_path
+            # For old-style checkpoints we need to know the start epoch.
+            # Try to infer from saved history JSON.
+            hist_path = os.path.join(args.output_dir, f'history_{args.model}.json')
+            if os.path.exists(hist_path):
+                with open(hist_path) as _hf:
+                    old_hist = json.load(_hf)
+                start_epoch = len(old_hist.get('val_f1', []))
+            print(f'    Will resume from best model weights: {best_model_path} '
+                  f'(start_epoch={start_epoch})')
+        else:
+            print(f'    WARNING: --resume set but no checkpoint found in {args.output_dir}')
+
     history = train_model(
         model, train_loader, val_loader,
         num_epochs=config.NUM_EPOCHS,
@@ -135,6 +167,8 @@ if args.model in PYTORCH_MODELS:
         save_path=best_model_path,
         test_mode=args.test_mode,
         score_threshold=score_thresh,
+        resume_path=resume_ckpt,
+        start_epoch=start_epoch,
     )
 
     # Save training history as JSON
@@ -184,18 +218,48 @@ elif args.model in ULTRALYTICS_MODELS:
     ul_project = os.path.join(args.output_dir, 'runs')
     ul_name = args.model
 
-    results = model.train(
-        data=data_yaml,
-        epochs=config.NUM_EPOCHS,
-        imgsz=config.IMG_SIZE,
-        batch=config.BATCH_SIZE,
-        project=ul_project,
-        name=ul_name,
-        exist_ok=True,
-        save=True,          # save checkpoints
-        save_period=-1,     # only save best and last
-        verbose=True,
-    )
+    # Check if resuming from an existing Ultralytics run
+    ul_resume = False
+    if args.resume:
+        last_pt = os.path.join(ul_project, ul_name, 'weights', 'last.pt')
+        if os.path.exists(last_pt):
+            ul_resume = last_pt
+            print(f'    Will resume Ultralytics training from: {last_pt}')
+        else:
+            print(f'    WARNING: --resume set but no last.pt found at {last_pt}')
+
+    if ul_resume:
+        # Ultralytics resume: load the last.pt model and call train with resume=True
+        # First, patch args.yaml to update the target epoch count
+        args_yaml_path = os.path.join(ul_project, ul_name, 'args.yaml')
+        if os.path.exists(args_yaml_path):
+            import yaml
+            with open(args_yaml_path, 'r') as yf:
+                ul_args = yaml.safe_load(yf)
+            old_epochs = ul_args.get('epochs', 20)
+            ul_args['epochs'] = config.NUM_EPOCHS
+            with open(args_yaml_path, 'w') as yf:
+                yaml.dump(ul_args, yf, default_flow_style=False)
+            print(f'    Updated args.yaml epochs: {old_epochs} -> {config.NUM_EPOCHS}')
+
+        from ultralytics import YOLO
+        model = YOLO(ul_resume)
+        results = model.train(
+            resume=True,
+        )
+    else:
+        results = model.train(
+            data=data_yaml,
+            epochs=config.NUM_EPOCHS,
+            imgsz=config.IMG_SIZE,
+            batch=config.BATCH_SIZE,
+            project=ul_project,
+            name=ul_name,
+            exist_ok=True,
+            save=True,          # save checkpoints
+            save_period=-1,     # only save best and last
+            verbose=True,
+        )
 
     # Copy best.pt to our standard output location
     import shutil
@@ -271,12 +335,24 @@ elif args.model in DEIMV2_MODELS:
     # Override output dir so checkpoints land in our standard location
     cmd += [f'--output-dir={args.output_dir}']
 
+    # Resume from last checkpoint if requested
+    if args.resume:
+        last_pth = os.path.join(args.output_dir, 'last.pth')
+        if os.path.exists(last_pth):
+            cmd += [f'--resume={last_pth}']
+            print(f'\n>>> Resuming DEIMv2 from checkpoint: {last_pth}')
+        else:
+            print(f'\n>>> WARNING: --resume set but no last.pth found at {last_pth}')
+
     if args.test_mode:
-        # In test mode: 1 epoch, override test via cmd option when supported,
-        # else just note the limitation
-        print('\n>>> [test_mode] DEIMv2 will run 1 epoch (override via config).')
-        # DEIMv2 supports --epoches override since 2025.9
-        cmd += ['--epoches=1']
+        # DEIMv2 supports YAML config overrides via -u key=value
+        print('\n>>> [test_mode] DEIMv2 will run 1 epoch (via -u epoches=1).')
+        cmd += ['-u', 'epoches=1']
+
+    # Override total epochs if specified
+    if args.epochs is not None:
+        cmd += ['-u', f'epoches={config.NUM_EPOCHS}']
+        print(f'    Overriding DEIMv2 total epochs to: {config.NUM_EPOCHS}')
 
     print(f'\n>>> Starting DEIMv2 training: {model.label}')
     print(f'    Config  : {config_path}')

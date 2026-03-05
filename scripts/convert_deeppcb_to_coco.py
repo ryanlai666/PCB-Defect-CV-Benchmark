@@ -41,14 +41,26 @@ from pathlib import Path
 
 
 # ─── Category map ────────────────────────────────────────────────────────────
+# DEIMv2 expects 0-indexed class labels (0 to num_classes-1).
+# DeepPCB uses 1-indexed types (1=open ... 6=pin-hole → remap to 0–5).
 CATEGORIES = [
-    {"id": 1, "name": "open",       "supercategory": "defect"},
-    {"id": 2, "name": "short",      "supercategory": "defect"},
-    {"id": 3, "name": "mousebite",  "supercategory": "defect"},
-    {"id": 4, "name": "spur",       "supercategory": "defect"},
-    {"id": 5, "name": "copper",     "supercategory": "defect"},
-    {"id": 6, "name": "pin-hole",   "supercategory": "defect"},
+    {"id": 0, "name": "open",       "supercategory": "defect"},
+    {"id": 1, "name": "short",      "supercategory": "defect"},
+    {"id": 2, "name": "mousebite",  "supercategory": "defect"},
+    {"id": 3, "name": "spur",       "supercategory": "defect"},
+    {"id": 4, "name": "copper",     "supercategory": "defect"},
+    {"id": 5, "name": "pin-hole",   "supercategory": "defect"},
 ]
+
+# Map from DeepPCB 1-indexed type → 0-indexed category_id
+DEEPPCB_TYPE_TO_CAT_ID = {
+    1: 0,  # open
+    2: 1,  # short
+    3: 2,  # mousebite
+    4: 3,  # spur
+    5: 4,  # copper
+    6: 5,  # pin-hole
+}
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -120,7 +132,9 @@ def parse_annotation_file(ann_path: Path):
                 continue  # background
             if x2 <= x1 or y2 <= y1:
                 continue
-            boxes.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2, "category_id": cat})
+            # Remap 1-indexed DeepPCB type to 0-indexed category_id for DEIMv2
+            cat_id = DEEPPCB_TYPE_TO_CAT_ID.get(cat, cat - 1)
+            boxes.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2, "category_id": cat_id})
     return boxes
 
 

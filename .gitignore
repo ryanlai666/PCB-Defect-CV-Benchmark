@@ -27,7 +27,13 @@ DEIMv2/ckpts/
 logs/
 outputs/
 runs/
+results/
 *.log
+
+# Backup snapshots of training runs (for comparison)
+outputs_*_backup/
+logs_*_backup/
+results_*_backup/
 
 # DEIMv2 own output dir (generated inside DEIMv2/)
 DEIMv2/outputs/
