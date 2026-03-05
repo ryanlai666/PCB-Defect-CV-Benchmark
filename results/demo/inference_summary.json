@@ -1,0 +1,32 @@
+{
+  "SME-YOLO": {
+    "avg_latency_ms": 46.71,
+    "fps": 21.41,
+    "num_images": 190
+  },
+  "YOLO26": {
+    "avg_latency_ms": 34.55,
+    "fps": 28.94,
+    "num_images": 190
+  },
+  "Faster R-CNN": {
+    "avg_latency_ms": 257.97,
+    "fps": 3.88,
+    "num_images": 490
+  },
+  "ViT-Det": {
+    "avg_latency_ms": 266.24,
+    "fps": 3.76,
+    "num_images": 490
+  },
+  "RT-DETR": {
+    "avg_latency_ms": 116.36,
+    "fps": 8.59,
+    "num_images": 190
+  },
+  "DEIMv2-L": {
+    "avg_latency_ms": 35.98,
+    "fps": 27.79,
+    "num_images": 495
+  }
+}

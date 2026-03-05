@@ -1,0 +1,32 @@
+{
+  "Faster R-CNN": {
+    "epochs": 49,
+    "training_time_s": 692,
+    "training_time_str": "0h 11m 32s"
+  },
+  "ViT-Det": {
+    "epochs": 50,
+    "training_time_s": 10863,
+    "training_time_str": "3h 1m 3s"
+  },
+  "SME-YOLO": {
+    "epochs": 50,
+    "training_time_s": 393.457,
+    "training_time_str": "0h 6m 33s"
+  },
+  "YOLO26": {
+    "epochs": 50,
+    "training_time_s": 674.921,
+    "training_time_str": "0h 11m 14s"
+  },
+  "RT-DETR": {
+    "epochs": 50,
+    "training_time_s": 1920.12,
+    "training_time_str": "0h 32m 0s"
+  },
+  "DEIMv2-L": {
+    "epochs": 50,
+    "training_time_s": 14699,
+    "training_time_str": "4h 4m 59s"
+  }
+}
