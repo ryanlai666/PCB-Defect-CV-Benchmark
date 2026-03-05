@@ -229,12 +229,10 @@ def load_deimv2_history(output_dir, model_name, display_name):
         print(f'  [SKIP] DEIMv2 log not found: {log_path}')
         return None
 
-    epochs = []
-    train_loss = []
-    val_mAP50 = []
-    val_mAP50_95 = []
-    val_mAP75 = []
-    val_recall = []
+    # Use a dict keyed by epoch to deduplicate (log may contain entries
+    # from both initial and resumed training runs for the same epochs).
+    # We keep the LATEST entry for each epoch.
+    epoch_data = {}   # epoch_0indexed -> (train_loss, coco_eval_bbox)
 
     with open(log_path, 'r') as f:
         for line in f:
@@ -242,20 +240,32 @@ def load_deimv2_history(output_dir, model_name, display_name):
             if line.startswith('{') and 'test_coco_eval_bbox' in line:
                 try:
                     entry = json.loads(line)
-                    ep = entry.get('epoch', len(epochs))
-                    epochs.append(ep + 1)  # 0-indexed → 1-indexed
-                    train_loss.append(entry.get('train_loss', 0))
+                    ep = entry.get('epoch', -1)
                     ce = entry['test_coco_eval_bbox']
-                    val_mAP50_95.append(ce[0])
-                    val_mAP50.append(ce[1])
-                    val_mAP75.append(ce[2])
-                    val_recall.append(ce[8])  # AR@100
+                    epoch_data[ep] = (entry.get('train_loss', 0), ce)
                 except (json.JSONDecodeError, KeyError, IndexError):
                     pass
 
-    if not epochs:
+    if not epoch_data:
         print(f'  [SKIP] No COCO eval entries in {log_path}')
         return None
+
+    # Sort by epoch and unpack
+    epochs = []
+    train_loss = []
+    val_mAP50 = []
+    val_mAP50_95 = []
+    val_mAP75 = []
+    val_recall = []
+
+    for ep in sorted(epoch_data.keys()):
+        tl, ce = epoch_data[ep]
+        epochs.append(ep + 1)  # 0-indexed → 1-indexed
+        train_loss.append(tl)
+        val_mAP50_95.append(ce[0])
+        val_mAP50.append(ce[1])
+        val_mAP75.append(ce[2])
+        val_recall.append(ce[8])  # AR@100
 
     # Compute F1 using mAP50 as precision proxy and AR@100 as recall proxy
     val_f1 = [
