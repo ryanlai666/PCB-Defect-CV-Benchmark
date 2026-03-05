@@ -32,7 +32,7 @@ import config
 from config import CLASS_MAP, DEVICE, NUM_CLASSES, SCORE_THRESHOLD
 
 # ── Constants ────────────────────────────────────────────────────────────────
-MODELS_TO_RUN = ['sme_yolo', 'yolo26', 'faster_rcnn', 'vit_det', 'rt_detr']
+MODELS_TO_RUN = ['sme_yolo', 'yolo26', 'faster_rcnn', 'vit_det', 'rt_detr', 'deimv2_l']
 
 # Class names for drawing (index 0 = background for PyTorch-loop models)
 YOLO_CLASS_NAMES  = {i: name for i, name in enumerate(CLASS_MAP.values())}
@@ -49,9 +49,10 @@ BOX_COLORS = [
     (128, 128, 0),  # fallback   — teal
 ]
 
-# Which models use the PyTorch training loop vs. Ultralytics
+# Which models use the PyTorch training loop vs. Ultralytics vs. DEIMv2
 PYTORCH_MODELS     = {'faster_rcnn', 'vit_det'}
 ULTRALYTICS_MODELS = {'sme_yolo', 'yolo26', 'rt_detr'}
+DEIMV2_MODELS      = {'deimv2_l'}
 
 
 # ─── Utility functions ──────────────────────────────────────────────────────
@@ -229,6 +230,132 @@ def run_ultralytics_inference(model_name, weight_path, image_paths, output_dir,
     return latencies
 
 
+def run_deimv2_inference(model_name, output_dir, num_warmup=10,
+                         score_thresh=SCORE_THRESHOLD, max_images=0):
+    """Run DEIMv2 model inference and return timing stats.
+
+    Loads the model through DEIMv2's own config/engine system, then runs
+    per-image inference with synchronised CUDA timing (same pattern as the
+    other runners so results are directly comparable).
+    """
+    import sys as _sys
+    deimv2_dir = os.path.join(PROJECT_DIR, 'DEIMv2')
+    if deimv2_dir not in _sys.path:
+        _sys.path.insert(0, deimv2_dir)
+
+    # Locate config and checkpoint
+    config_path = os.path.join(
+        deimv2_dir, 'configs', 'deimv2', 'deimv2_dinov3_l_deeppcb.yml'
+    )
+    best_ckpt = os.path.join(output_dir, 'best_stg2.pth')
+    if not os.path.isfile(best_ckpt):
+        best_ckpt = os.path.join(output_dir, 'best_stg1.pth')
+    if not os.path.isfile(best_ckpt):
+        print(f'  [SKIP] DEIMv2-L checkpoint not found in {output_dir}')
+        return []
+    if not os.path.isfile(config_path):
+        print(f'  [SKIP] DEIMv2-L config not found: {config_path}')
+        return []
+
+    # Build model via DEIMv2 engine
+    try:
+        from engine.core import YAMLConfig
+        cfg = YAMLConfig(config_path, resume=best_ckpt)
+        model = cfg.model
+        ckpt  = torch.load(best_ckpt, map_location='cpu', weights_only=False)
+        # Load from EMA if available (gives best weights)
+        if 'ema' in ckpt and isinstance(ckpt['ema'], dict):
+            state = ckpt['ema'].get('module', ckpt.get('model', {}))
+        else:
+            state = ckpt.get('model', {})
+        if isinstance(state, dict):
+            model.load_state_dict(state, strict=False)
+    except Exception as e:
+        print(f'  [SKIP] Could not load DEIMv2-L model: {e}')
+        return []
+
+    model.to(DEVICE)
+    model.eval()
+
+    # Collect test images from the COCO-format split (images may be nested
+    # in subdirectories like group.../NNNNN/NNNNN_test.jpg).
+    test_img_dir = os.path.join(
+        PROJECT_DIR, 'data', 'deeppcb_coco', 'images', 'test'
+    )
+    if not os.path.isdir(test_img_dir):
+        # Fall back to YOLO dataset val split
+        test_img_dir = os.path.join(config.YOLO_DATA_DIR, 'images', 'val')
+    exts = {'.jpg', '.jpeg', '.png', '.bmp'}
+    image_paths = sorted([
+        os.path.join(root, f)
+        for root, _, files in os.walk(test_img_dir)
+        for f in files
+        if os.path.splitext(f)[1].lower() in exts
+    ])
+    if max_images > 0:
+        image_paths = image_paths[:max_images]
+
+    os.makedirs(output_dir_out := os.path.join(
+        PROJECT_DIR, 'results', 'demo', model_name
+    ), exist_ok=True)
+
+    import torchvision.transforms.functional as TF
+
+    latencies = []
+    print(f'  Running DEIMv2-L on {len(image_paths)} images ...')
+
+    with torch.no_grad():
+        for idx, img_path in enumerate(image_paths):
+            pil_img = Image.open(img_path).convert('RGB')
+            # Resize to 640×640 and normalise (same as training val transform)
+            pil_resized = pil_img.resize((640, 640))
+            img_t = TF.to_tensor(pil_resized)                          # [0,1]
+            img_t = TF.normalize(
+                img_t,
+                mean=[0.485, 0.456, 0.406],
+                std =[0.229, 0.224, 0.225],
+            ).unsqueeze(0).to(DEVICE)                                  # (1,3,H,W)
+
+            orig_size = torch.tensor(
+                [[pil_img.height, pil_img.width]], dtype=torch.long
+            ).to(DEVICE)
+
+            # Warm-up
+            if idx < num_warmup:
+                _ = model(img_t, orig_size)
+                continue
+
+            # Timed inference
+            if DEVICE.type == 'cuda':
+                torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            outputs = model(img_t, orig_size)
+            if DEVICE.type == 'cuda':
+                torch.cuda.synchronize()
+            t1 = time.perf_counter()
+            latencies.append((t1 - t0) * 1000)  # ms
+
+            # Draw predictions
+            img_bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+            try:
+                labels = outputs['labels'][0].cpu().numpy()
+                boxes  = outputs['boxes'][0].cpu().numpy()   # xyxy in orig coords
+                scores = outputs['scores'][0].cpu().numpy()
+                annotated = draw_boxes(
+                    img_bgr, boxes, labels - 1, scores,   # DEIMv2 labels are 1-indexed
+                    YOLO_CLASS_NAMES, score_thresh
+                )
+            except Exception:
+                annotated = img_bgr
+
+            out_path = os.path.join(
+                output_dir_out, f'deimv2_l_{idx:04d}.jpg'
+            )
+            cv2.imwrite(out_path, annotated)
+
+    return latencies
+
+
 # ─── Weight-path resolver ────────────────────────────────────────────────────
 
 def resolve_weight(model_name, meta_type):
@@ -315,6 +442,7 @@ def main():
         'sme_yolo':    'SME-YOLO',
         'yolo26':      'YOLO26',
         'rt_detr':     'RT-DETR',
+        'deimv2_l':    'DEIMv2-L',
     }
 
     for model_name in args.models:
@@ -355,6 +483,16 @@ def main():
                 max_images=args.num_images,
             )
 
+        elif model_name in DEIMV2_MODELS:
+            # ── DEIMv2 models ─────────────────────────────────────────────
+            deimv2_output = os.path.join(PROJECT_DIR, 'outputs', model_name)
+            lats = run_deimv2_inference(
+                model_name, deimv2_output,
+                num_warmup=args.num_warmup,
+                score_thresh=args.score_thresh,
+                max_images=args.num_images,
+            )
+
         else:
             print(f'  [SKIP] Unknown model type for: {model_name}')
             continue
@@ -379,11 +517,20 @@ def main():
               f'{stats["fps"]:<10.1f} {stats["num_images"]:<10}')
     print('=' * 70)
 
-    # Save summary JSON
+    # Save summary JSON — merge with existing data so partial runs don't
+    # wipe out previously measured results for other models.
     summary_path = os.path.join(output_root, 'inference_summary.json')
     os.makedirs(output_root, exist_ok=True)
+    existing = {}
+    if os.path.isfile(summary_path):
+        try:
+            with open(summary_path, 'r') as f:
+                existing = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    existing.update(summary)   # new measurements override old ones
     with open(summary_path, 'w') as f:
-        json.dump(summary, f, indent=2)
+        json.dump(existing, f, indent=2)
     print(f'\n  Summary saved to: {summary_path}')
 
 

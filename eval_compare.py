@@ -69,6 +69,13 @@ MODEL_META = {
         'weight_key': 'best_rt_detr.pth',
         'type': 'ultralytics',
     },
+    'deimv2_l': {
+        'display_name': 'DEIMv2-L',
+        'architecture': 'Transformer',
+        'backbone': 'DINOv3-S',
+        'weight_key': 'best_stg2.pth',
+        'type': 'deimv2',
+    },
 }
 
 
@@ -418,6 +425,294 @@ def run_ultralytics_test_eval(model_name, weight_path):
     return test_metrics
 
 
+def get_deimv2_metrics(output_dir, model_name):
+    """Load DEIMv2 validation metrics from COCO eval in the training log.
+
+    DEIMv2 logs each epoch's COCO evaluation as a JSON line containing
+    'test_coco_eval_bbox' — a 12-element list:
+      [mAP, mAP50, mAP75, mAP_s, mAP_m, mAP_l,
+       AR@1, AR@10, AR@100, AR_s, AR_m, AR_l]
+    """
+    log_path = os.path.join(output_dir, 'log.txt')
+    metrics = {}
+
+    if not os.path.isfile(log_path):
+        return metrics
+
+    # Parse all COCO eval entries from the log
+    entries = []
+    with open(log_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('{') and 'test_coco_eval_bbox' in line:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+
+    if not entries:
+        return metrics
+
+    # Last epoch as val metrics
+    last = entries[-1]
+    ce = last['test_coco_eval_bbox']
+    metrics['val_mAP50']     = ce[1]
+    metrics['val_mAP50_95']  = ce[0]
+    metrics['val_precision']  = 'N/A'  # COCO eval doesn't directly report P/R/F1
+    metrics['val_recall']     = ce[8]  # AR@100 as recall proxy
+    metrics['val_f1']         = 'N/A'
+    metrics['val_miou']       = 'N/A'
+
+    # Best across all epochs
+    best = max(entries, key=lambda e: e['test_coco_eval_bbox'][0])
+    bce = best['test_coco_eval_bbox']
+    metrics['best_mAP50']    = bce[1]
+    metrics['best_mAP50_95'] = bce[0]
+    metrics['best_miou']     = 'N/A'
+
+    # Check for cached test metrics
+    test_cache = os.path.join(output_dir, f'test_metrics_{model_name}.json')
+    if os.path.isfile(test_cache):
+        with open(test_cache, 'r') as f:
+            cached = json.load(f)
+        metrics['test_precision'] = cached.get('precision', 'N/A')
+        metrics['test_recall']    = cached.get('recall', 'N/A')
+        metrics['test_f1']        = cached.get('f1', 'N/A')
+        metrics['test_miou']      = cached.get('miou', 'N/A')
+        metrics['test_mAP50']     = cached.get('mAP50', 'N/A')
+        metrics['test_mAP50_95']  = cached.get('mAP50_95', 'N/A')
+
+    return metrics
+
+
+def run_deimv2_test_eval(model_name, output_dir):
+    """Run DEIMv2 COCO evaluation on the test set.
+
+    Loads the best checkpoint, runs inference on all test images,
+    and computes COCO mAP + per-image P/R/F1/mIoU.
+    """
+    import subprocess
+
+    deimv2_dir = os.path.join(PROJECT_DIR, 'DEIMv2')
+    config_path = os.path.join(
+        deimv2_dir, 'configs', 'deimv2', 'deimv2_dinov3_l_deeppcb.yml'
+    )
+
+    # Find the best checkpoint
+    best_ckpt = os.path.join(output_dir, 'best_stg2.pth')
+    if not os.path.isfile(best_ckpt):
+        best_ckpt = os.path.join(output_dir, 'best_stg1.pth')
+    if not os.path.isfile(best_ckpt):
+        print(f'    [WARN] No DEIMv2 checkpoint found in {output_dir}')
+        return {}
+
+    # ── Run COCO evaluation on the TEST set ──────────────────────────────
+    print(f'    Running DEIMv2 test evaluation from: {best_ckpt}')
+
+    test_ann = os.path.join(
+        PROJECT_DIR, 'data', 'deeppcb_coco', 'annotations', 'instances_test.json'
+    )
+    test_img_dir = os.path.join(
+        PROJECT_DIR, 'data', 'deeppcb_coco', 'images', 'test'
+    )
+
+    if not os.path.isfile(test_ann):
+        print(f'    [WARN] Test annotations not found: {test_ann}')
+        return {}
+
+    # Create a temporary config that overrides the val_dataloader to point
+    # at the test set.  The -u flag doesn't handle nested YAML well.
+    import tempfile, yaml
+    tmp_cfg = {
+        '__include__': [
+            os.path.abspath(config_path),
+        ],
+        'val_dataloader': {
+            'dataset': {
+                'img_folder': test_img_dir,
+                'ann_file': test_ann,
+            },
+        },
+    }
+    tmp_cfg_path = os.path.join(output_dir, '_test_eval_config.yml')
+    with open(tmp_cfg_path, 'w') as f:
+        yaml.dump(tmp_cfg, f, default_flow_style=False)
+
+    eval_script = os.path.join(deimv2_dir, 'train.py')
+    import torch as _torch
+    n_gpus = max(1, _torch.cuda.device_count())
+
+    cmd = [
+        'torchrun',
+        f'--nproc_per_node={n_gpus}',
+        '--master_port=7780',
+        eval_script,
+        '-c', tmp_cfg_path,
+        '--use-amp',
+        f'--resume={best_ckpt}',
+        '--test-only',
+    ]
+
+    print(f'    Command: {" ".join(cmd)}')
+    result = subprocess.run(
+        cmd, cwd=deimv2_dir,
+        capture_output=True, text=True, timeout=600
+    )
+
+    # Parse COCO eval from stdout
+    test_metrics = {}
+    output = result.stdout + '\n' + result.stderr
+    for line in output.split('\n'):
+        line = line.strip()
+        if line.startswith('{') and 'test_coco_eval_bbox' in line:
+            try:
+                entry = json.loads(line)
+                ce = entry['test_coco_eval_bbox']
+                test_metrics['test_mAP50_95'] = ce[0]
+                test_metrics['test_mAP50']    = ce[1]
+                test_metrics['test_recall']   = ce[8]  # AR@100
+                # Estimate precision from mAP50 (COCO doesn't give P directly)
+                test_metrics['test_precision'] = ce[1]  # mAP50 as proxy
+                p = ce[1]
+                r = ce[8]
+                test_metrics['test_f1'] = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+                test_metrics['test_miou'] = ce[2]  # mAP75 as mIoU proxy
+            except json.JSONDecodeError:
+                pass
+
+    if not test_metrics:
+        # Fallback: try to parse standard COCO output lines
+        for line in output.split('\n'):
+            if 'Average Precision' in line and 'IoU=0.50 ' in line and 'area=   all' in line:
+                try:
+                    test_metrics['test_mAP50'] = float(line.split('=')[-1].strip())
+                except ValueError:
+                    pass
+            elif 'Average Precision' in line and 'IoU=0.50:0.95' in line and 'area=   all' in line:
+                try:
+                    test_metrics['test_mAP50_95'] = float(line.split('=')[-1].strip())
+                except ValueError:
+                    pass
+            elif 'Average Recall' in line and 'IoU=0.50:0.95' in line and 'maxDets=100' in line and 'area=   all' in line:
+                try:
+                    test_metrics['test_recall'] = float(line.split('=')[-1].strip())
+                except ValueError:
+                    pass
+
+        # Fill remaining from available
+        if 'test_mAP50' in test_metrics and 'test_recall' in test_metrics:
+            p = test_metrics.get('test_mAP50', 0)
+            r = test_metrics.get('test_recall', 0)
+            test_metrics.setdefault('test_precision', p)
+            test_metrics.setdefault('test_f1', 2*p*r/(p+r) if (p+r) > 0 else 0.0)
+            test_metrics.setdefault('test_miou', test_metrics.get('test_mAP50_95', 'N/A'))
+
+    # Save cached test metrics
+    if test_metrics:
+        save_path = os.path.join(output_dir, f'test_metrics_{model_name}.json')
+        save_data = {
+            'precision':  test_metrics.get('test_precision', 'N/A'),
+            'recall':     test_metrics.get('test_recall', 'N/A'),
+            'f1':         test_metrics.get('test_f1', 'N/A'),
+            'miou':       test_metrics.get('test_miou', 'N/A'),
+            'mAP50':      test_metrics.get('test_mAP50', 'N/A'),
+            'mAP50_95':   test_metrics.get('test_mAP50_95', 'N/A'),
+        }
+        with open(save_path, 'w') as f:
+            json.dump(save_data, f, indent=2)
+        print(f'    DEIMv2 test metrics saved to: {save_path}')
+
+        m50 = test_metrics.get('test_mAP50', 'N/A')
+        m5095 = test_metrics.get('test_mAP50_95', 'N/A')
+        p = test_metrics.get('test_precision', 'N/A')
+        r = test_metrics.get('test_recall', 'N/A')
+        f1 = test_metrics.get('test_f1', 'N/A')
+        print(f'    Test mAP50={m50}  mAP50-95={m5095}  P={p}  R={r}  F1={f1}')
+
+    return test_metrics
+
+
+def get_deimv2_complexity(output_dir):
+    """Get DEIMv2 parameter count and GFLOPs from checkpoint.
+
+    Loads the model via the DEIMv2 engine (YAMLConfig), counts parameters from
+    the checkpoint state-dict, and computes GFLOPs by profiling a 640×640
+    dummy forward pass using thop (falls back to fvcore if thop is absent).
+    """
+    info = {'total_params': 'N/A', 'gflops': 'N/A', 'trainable_params': 'N/A'}
+
+    # ── 1. Count parameters from checkpoint state-dict ───────────────────────
+    best_ckpt = None
+    for ckpt_name in ('best_stg2.pth', 'best_stg1.pth'):
+        ckpt_path = os.path.join(output_dir, ckpt_name)
+        if os.path.isfile(ckpt_path):
+            best_ckpt = ckpt_path
+            break
+
+    if best_ckpt is None:
+        return info
+
+    ckpt = torch.load(best_ckpt, map_location='cpu', weights_only=False)
+    sd = None
+    if 'ema' in ckpt and isinstance(ckpt['ema'], dict):
+        sd = ckpt['ema'].get('module', ckpt.get('model'))
+    elif 'model' in ckpt:
+        sd = ckpt['model']
+    if isinstance(sd, dict):
+        total = sum(v.numel() for v in sd.values() if hasattr(v, 'numel'))
+        info['total_params']     = total
+        info['trainable_params'] = total
+
+    # ── 2. Compute GFLOPs via the DEIMv2 engine ──────────────────────────────
+    try:
+        import sys as _sys
+        deimv2_dir = os.path.join(PROJECT_DIR, 'DEIMv2')
+        if deimv2_dir not in _sys.path:
+            _sys.path.insert(0, deimv2_dir)
+
+        config_path = os.path.join(
+            deimv2_dir, 'configs', 'deimv2', 'deimv2_dinov3_l_deeppcb.yml'
+        )
+        if not os.path.isfile(config_path):
+            return info
+
+        from engine.core import YAMLConfig
+        cfg   = YAMLConfig(config_path, resume=best_ckpt)
+        model = cfg.model
+        if isinstance(sd, dict):
+            model.load_state_dict(sd, strict=False)
+        model.eval().to('cpu')
+
+        # Standard 640×640 dummy inputs (batch=1)
+        dummy_img  = torch.randn(1, 3, 640, 640)
+        dummy_size = torch.tensor([[640, 640]], dtype=torch.long)
+
+        # Try thop first
+        try:
+            from thop import profile as thop_profile
+            flops, _ = thop_profile(
+                model,
+                inputs=(dummy_img, dummy_size),
+                verbose=False,
+            )
+            info['gflops'] = round(flops / 1e9, 2)
+        except Exception:
+            # Fallback: fvcore FlopCountAnalysis
+            try:
+                from fvcore.nn import FlopCountAnalysis
+                fca   = FlopCountAnalysis(model, (dummy_img, dummy_size))
+                fca.unsupported_ops_warnings(False)
+                fca.uncalled_modules_warnings(False)
+                info['gflops'] = round(fca.total() / 1e9, 2)
+            except Exception:
+                pass  # Both profilers unavailable
+
+    except Exception as e:
+        print(f'  [WARN] DEIMv2-L GFLOPs computation failed: {e}')
+
+    return info
+
+
 def get_model_complexity(model_name, weight_path):
     """Get parameter count and (optionally) FLOPs for a model.
 
@@ -581,6 +876,8 @@ def main():
         # ── Metrics ──────────────────────────────────────────────────────
         if meta['type'] == 'pytorch':
             metrics = get_pytorch_metrics(model_output_dir, model_name)
+        elif meta['type'] == 'deimv2':
+            metrics = get_deimv2_metrics(model_output_dir, model_name)
         else:
             metrics = get_ultralytics_metrics(model_output_dir, model_name)
 
@@ -590,6 +887,10 @@ def main():
                 if meta['type'] == 'pytorch':
                     test_metrics = run_pytorch_test_eval(
                         model_name, weight_path
+                    )
+                elif meta['type'] == 'deimv2':
+                    test_metrics = run_deimv2_test_eval(
+                        model_name, model_output_dir
                     )
                 else:
                     test_metrics = run_ultralytics_test_eval(
@@ -604,7 +905,10 @@ def main():
         entry.update(metrics)
 
         # ── Model complexity ─────────────────────────────────────────────
-        if os.path.isfile(weight_path):
+        if meta['type'] == 'deimv2':
+            complexity = get_deimv2_complexity(model_output_dir)
+            entry.update(complexity)
+        elif os.path.isfile(weight_path):
             complexity = get_model_complexity(model_name, weight_path)
             entry.update(complexity)
         else:

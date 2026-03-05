@@ -179,20 +179,43 @@ if args.model in PYTORCH_MODELS:
 
     # ── Final evaluation on test set ─────────────────────────────────────
     import torch
-    from training import validate
+    from training import validate, _strip_tv_tensors
+    from evaluation import compute_map
 
     print('\n>>> Evaluating best model on test set...')
     model.load_state_dict(torch.load(best_model_path, map_location=config.DEVICE))
     model.to(config.DEVICE)
+    model.eval()
+
+    # Compute P, R, F1, mIoU via validate()
     test_metrics = validate(model, test_loader, device=config.DEVICE,
                             score_threshold=score_thresh)
+
+    # Compute mAP50 and mAP50-95 (requires raw predictions)
+    print('    Computing mAP on test set...')
+    all_preds = []
+    all_targets = []
+    with torch.no_grad():
+        for images, targets in test_loader:
+            images = [_strip_tv_tensors(img).to(config.DEVICE) for img in images]
+            targets = [{k: _strip_tv_tensors(v).to(config.DEVICE)
+                        for k, v in t.items()} for t in targets]
+            predictions = model(images)
+            all_preds.extend(predictions)
+            all_targets.extend(targets)
+
+    map_result = compute_map(all_preds, all_targets)
+    test_metrics['mAP50'] = map_result['mAP50']
+    test_metrics['mAP50_95'] = map_result['mAP50_95']
 
     print(f'    Test F1:        {test_metrics["f1"]:.4f}')
     print(f'    Test mIoU:      {test_metrics["miou"]:.4f}')
     print(f'    Test Precision: {test_metrics["precision"]:.4f}')
     print(f'    Test Recall:    {test_metrics["recall"]:.4f}')
+    print(f'    Test mAP@0.5:   {test_metrics["mAP50"]:.4f}')
+    print(f'    Test mAP@.5:.95:{test_metrics["mAP50_95"]:.4f}')
 
-    # Save test metrics
+    # Save test metrics (complete — no missing values)
     test_metrics_path = os.path.join(args.output_dir, f'test_metrics_{args.model}.json')
     with open(test_metrics_path, 'w') as f:
         json.dump(test_metrics, f, indent=2)
@@ -230,7 +253,16 @@ elif args.model in ULTRALYTICS_MODELS:
 
     if ul_resume:
         # Ultralytics resume: load the last.pt model and call train with resume=True
-        # First, patch args.yaml to update the target epoch count
+        #
+        # IMPORTANT: Ultralytics stores the target epoch count inside the
+        # checkpoint itself (ckpt['train_args']['epochs']).  If the previous
+        # training already finished (e.g. 20/20 epochs), resume_training()
+        # will raise "nothing to resume".  We must patch BOTH:
+        #   1. args.yaml  — so the trainer reads the new epoch target
+        #   2. last.pt    — so resume_training() sees epochs remaining
+        import torch as _torch
+
+        # --- 1. Patch args.yaml -------------------------------------------
         args_yaml_path = os.path.join(ul_project, ul_name, 'args.yaml')
         if os.path.exists(args_yaml_path):
             import yaml
@@ -241,6 +273,34 @@ elif args.model in ULTRALYTICS_MODELS:
             with open(args_yaml_path, 'w') as yf:
                 yaml.dump(ul_args, yf, default_flow_style=False)
             print(f'    Updated args.yaml epochs: {old_epochs} -> {config.NUM_EPOCHS}')
+
+        # --- 2. Patch the checkpoint's train_args AND epoch ----------------
+        # Ultralytics resume_training() computes:
+        #     start_epoch = ckpt['epoch'] + 1
+        #     assert start_epoch > 0  ← fails when epoch == -1 (finished)
+        # We must:
+        #   a) Set train_args['epochs'] to the NEW total (e.g. 50)
+        #   b) Restore ckpt['epoch'] from -1 to last completed epoch index
+        #      (e.g. 19 for 20 epochs, 0-indexed) so start_epoch = 20 > 0
+        ckpt = _torch.load(ul_resume, map_location='cpu', weights_only=False)
+        patched = False
+        if 'train_args' in ckpt:
+            old_ep = ckpt['train_args'].get('epochs', None)
+            if old_ep is not None and old_ep < config.NUM_EPOCHS:
+                ckpt['train_args']['epochs'] = config.NUM_EPOCHS
+
+                # Fix the epoch marker: -1 means "completed", restore to
+                # last finished epoch index so Ultralytics can compute
+                # the correct start_epoch for resumption.
+                if ckpt.get('epoch', 0) == -1:
+                    ckpt['epoch'] = old_ep - 1   # e.g. 20-1 = 19 (0-indexed)
+                    print(f'    Patched last.pt epoch: -1 -> {old_ep - 1}')
+
+                _torch.save(ckpt, ul_resume)
+                patched = True
+                print(f'    Patched last.pt train_args.epochs: {old_ep} -> {config.NUM_EPOCHS}')
+        if not patched:
+            print(f'    last.pt train_args not patched (already >= {config.NUM_EPOCHS} or missing)')
 
         from ultralytics import YOLO
         model = YOLO(ul_resume)
