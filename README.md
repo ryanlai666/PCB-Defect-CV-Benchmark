@@ -10,18 +10,15 @@ comparing multiple deep-learning model architectures on the
 
 | ID | Model | Backbone | Training engine |
 |----|-------|----------|-----------------|
-| `faster_rcnn` | Faster R-CNN | ResNet-50-FPN | PyTorch |
-| `faster_rcnn_ft` | Faster R-CNN (fine-tuned) | ResNet-50-FPN | PyTorch |
-| `vit_det` | ViT-Det | ViT-Base (timm) | PyTorch |
-| `vit_mamba` | ViT-Mamba | MambaVision | PyTorch |
-| `yolo26` | YOLO26 | — | Ultralytics |
-| `sme_yolo` | SME-YOLO | — | Ultralytics |
-| `rt_detr` | RT-DETR-L | ResNet | Ultralytics |
+| `faster_rcnn` | Faster R-CNN | ResNet-50-FPN v2 | PyTorch |
+| `vit_det` | ViT-Det | ViT-Base/16 + FPN | PyTorch |
+| `sme_yolo` | SME-YOLO | YOLOv11n (CSPDarknet) | Ultralytics |
+| `yolo26` | YOLO26 | YOLO26n | Ultralytics |
+| `rt_detr` | RT-DETR-L | ResNet-based | Ultralytics |
 | `deimv2_l` | **DEIMv2-L** | **DINOv3-S** | DEIMv2 / torchrun |
-| `deimv2_x` | **DEIMv2-X** | **DINOv3-S+** | DEIMv2 / torchrun |
 
-DEIMv2-L and DEIMv2-X are state-of-the-art real-time object detectors that
-combine a DEIM-style DETR decoder with DINOv3 vision-foundation backbones
+DEIMv2-L is a state-of-the-art real-time object detector that combines a
+DEIM-style DETR decoder with a DINOv3 vision-foundation backbone
 (see [`DEIMv2/README.md`](DEIMv2/README.md)).
 
 ---
@@ -87,7 +84,7 @@ when you first run a DEIMv2 model.
 
 ```bash
 conda activate pcb
-bash install_deps.sh
+bash scripts/install_deps.sh
 ```
 
 For DEIMv2, additionally:
@@ -118,9 +115,6 @@ python train_model.py --model vit_det --epochs 20
 # DEIMv2-L (DINOv3-S backbone, ~32M params)
 python train_model.py --model deimv2_l
 
-# DEIMv2-X (DINOv3-S+ backbone, ~50M params)
-python train_model.py --model deimv2_x
-
 # Quick smoke-test (1 epoch)
 python train_model.py --model deimv2_l --test_mode
 ```
@@ -128,9 +122,9 @@ python train_model.py --model deimv2_l --test_mode
 ### 4. Train all models sequentially
 
 ```bash
-bash run_all_models.sh           # all models, full run
-bash run_all_models.sh --test    # test mode (1 epoch each)
-bash run_all_models.sh deimv2_l  # single model
+bash scripts/run_all_models.sh           # all models, full run
+bash scripts/run_all_models.sh --test    # test mode (1 epoch each)
+bash scripts/run_all_models.sh deimv2_l  # single model
 ```
 
 ### 5. Evaluate and compare
@@ -147,24 +141,28 @@ python inference_demo.py    # speed benchmark
 
 ```
 PCB_wafer_defect_detection/
-├── DEIMv2/                  ← external repo (not in git)
-├── dinov3/                  ← external repo (not in git)
-├── DeepPCB/                 ← dataset (not in git)
-├── data/deeppcb_coco/       ← converted COCO JSONs (auto-generated, not in git)
-├── models/
-│   ├── __init__.py          ← model registry
-│   ├── faster_rcnn.py
-│   ├── vit_det.py
-│   ├── deimv2_l.py          ← DEIMv2-L wrapper
-│   └── deimv2_x.py          ← DEIMv2-X wrapper
-├── scripts/
-│   └── convert_deeppcb_to_coco.py
-├── train_model.py           ← unified training entry-point
-├── run_all_models.sh        ← sequential training orchestrator
-├── eval_compare.py
-├── inference_demo.py
-├── parse_logs.py
-└── config.py
+├── models/                          ← model definitions
+│   ├── __init__.py                  ← model registry (6 models)
+│   ├── faster_rcnn.py / vit_det.py  ← PyTorch-loop models
+│   ├── sme_yolo.py / yolo26.py / rt_detr.py  ← Ultralytics
+│   └── deimv2_l.py                  ← DEIMv2-L wrapper
+├── scripts/                         ← shell scripts & utilities
+│   ├── run_all_models.sh            ← sequential training orchestrator
+│   ├── run_resume_50ep.sh           ← resume training to 50 epochs
+│   ├── install_deps.sh              ← install dependencies
+│   └── convert_deeppcb_to_coco.py   ← dataset conversion
+├── train_model.py                   ← unified training entry-point
+├── eval_compare.py                  ← evaluation & comparison tables
+├── inference_demo.py                ← speed benchmarks
+├── parse_logs.py                    ← log parsing & plots
+├── config.py / dataset.py / training.py / evaluation.py / utils.py
+├── REPORT.md                        ← final results report
+├── DEIMv2/                          ← external repo (not in git)
+├── dinov3/                          ← external repo (not in git)
+├── DeepPCB/                         ← dataset (not in git)
+├── outputs/                         ← training outputs (not in git)
+├── results/                         ← evaluation results (not in git)
+└── _archive/                        ← old/unused files (not in git)
 ```
 
 ---

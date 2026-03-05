@@ -215,6 +215,70 @@ def load_ultralytics_results(output_dir, model_name, display_name):
     return result
 
 
+def load_deimv2_history(output_dir, model_name, display_name):
+    """Load DEIMv2 training history from log.txt.
+
+    Each epoch's COCO evaluation is logged as a JSON line containing
+    'test_coco_eval_bbox' and 'epoch'.
+
+    Returns:
+        dict with keys matching other loaders' output structure.
+    """
+    log_path = os.path.join(output_dir, 'log.txt')
+    if not os.path.isfile(log_path):
+        print(f'  [SKIP] DEIMv2 log not found: {log_path}')
+        return None
+
+    epochs = []
+    train_loss = []
+    val_mAP50 = []
+    val_mAP50_95 = []
+    val_mAP75 = []
+    val_recall = []
+
+    with open(log_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('{') and 'test_coco_eval_bbox' in line:
+                try:
+                    entry = json.loads(line)
+                    ep = entry.get('epoch', len(epochs))
+                    epochs.append(ep + 1)  # 0-indexed → 1-indexed
+                    train_loss.append(entry.get('train_loss', 0))
+                    ce = entry['test_coco_eval_bbox']
+                    val_mAP50_95.append(ce[0])
+                    val_mAP50.append(ce[1])
+                    val_mAP75.append(ce[2])
+                    val_recall.append(ce[8])  # AR@100
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    pass
+
+    if not epochs:
+        print(f'  [SKIP] No COCO eval entries in {log_path}')
+        return None
+
+    # Compute F1 using mAP50 as precision proxy and AR@100 as recall proxy
+    val_f1 = [
+        2 * p * r / (p + r) if (p + r) > 0 else 0.0
+        for p, r in zip(val_mAP50, val_recall)
+    ]
+
+    # Extract training time
+    training_time_s = _extract_pytorch_training_time(output_dir, model_name)
+
+    return {
+        'model':         display_name,
+        'epochs':        epochs,
+        'train_loss':    train_loss,
+        'val_f1':        val_f1,
+        'val_precision': val_mAP50,   # mAP50 as precision proxy
+        'val_recall':    val_recall,
+        'val_mAP50':     val_mAP50,
+        'val_mAP50_95':  val_mAP50_95,
+        'training_time_s': training_time_s,
+    }
+
+
 
 # ─── Plotting ────────────────────────────────────────────────────────────────
 
@@ -309,6 +373,7 @@ def plot_comparison(all_data, output_dir):
         'YOLO26':        '#3498db',
         'ViT-Det':      '#9b59b6',
         'RT-DETR':      '#f39c12',
+        'DEIMv2-L':     '#1abc9c',
     }
     markers = {
         'Faster R-CNN': 'o',
@@ -316,6 +381,7 @@ def plot_comparison(all_data, output_dir):
         'YOLO26':        '^',
         'ViT-Det':      'D',
         'RT-DETR':      'P',
+        'DEIMv2-L':     'X',
     }
 
     # ── Panel 1: Training Loss ───────────────────────────────────────────
@@ -420,6 +486,13 @@ def main():
     if rtdetr:
         all_data.append(rtdetr)
         plot_individual_model(rtdetr, plot_dir)
+
+    # ── DEIMv2-L (DEIMv2 engine) ──────────────────────────────────────────
+    deimv2_dir = os.path.join(PROJECT_DIR, 'outputs', 'deimv2_l')
+    deimv2 = load_deimv2_history(deimv2_dir, 'deimv2_l', 'DEIMv2-L')
+    if deimv2:
+        all_data.append(deimv2)
+        plot_individual_model(deimv2, plot_dir)
 
     # ── Comparison overlay ───────────────────────────────────────────────
     if len(all_data) >= 2:
