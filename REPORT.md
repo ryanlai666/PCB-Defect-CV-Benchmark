@@ -189,14 +189,14 @@ Test set results from the best checkpoints. All metrics computed using `eval_com
 
 | Model | Avg Latency (ms/img) | Throughput (FPS) | Test Images |
 |---|---|---|---|
-| **SME-YOLO** | **10.40** | **96.1** | 190 |
-| **YOLO26** | 10.99 | 91.0 | 190 |
-| **Faster R-CNN** | 26.60 | 37.6 | 490 |
-| **ViT-Det** | 34.39 | 29.1 | 490 |
-| **RT-DETR** | 46.82 | 21.4 | 190 |
-| **DEIMv2-L** | 56.78 | 17.6 | 490 |
+| **YOLO26** | **34.55** | **28.9** | 190 |
+| **DEIMv2-L** | 35.98 | 27.8 | 495 |
+| **SME-YOLO** | 46.71 | 21.4 | 190 |
+| **RT-DETR** | 116.36 | 8.6 | 190 |
+| **Faster R-CNN** | 257.97 | 3.9 | 490 |
+| **ViT-Det** | 266.24 | 3.8 | 490 |
 
-> Measured on NVIDIA RTX A6000, batch size 1, image size 640×640, with 10 warm-up images excluded from timing.
+> Measured on NVIDIA RTX A6000 (shared GPU, other processes active), batch size 1, image size 640×640, with 10 warm-up images excluded from timing.
 
 ---
 
@@ -246,15 +246,15 @@ Test set results from the best checkpoints. All metrics computed using `eval_com
 | **Highest test mAP@0.5:0.95** | 🏆 DEIMv2-L | 0.7890 | Best at strict IoU thresholds |
 | **Highest val mAP@0.5** | 🏆 DEIMv2-L | 0.9909 | Best validation accuracy (ep 28) |
 | **Highest test mIoU** | 🏆 SME-YOLO | 0.8856 | Best localization quality |
-| **Fastest Inference** | 🏆 SME-YOLO | 96.1 FPS | Real-time capable |
+| **Fastest Inference** | 🏆 YOLO26 | 28.9 FPS | Real-time capable |
 | **Smallest Model** | 🏆 YOLO26 | 5.14 MB / 2.51M params | Edge / mobile deployment |
 | **Most Improved (20→50ep)** | 🏆 Faster R-CNN | +0.337 F1 | Dramatic gains from extended training |
 
 ### Key Findings
 
-1. **RT-DETR is the best overall detector** for PCB defect detection, achieving the highest test F1 (0.966), test mAP@0.5 (0.975), and strong precision (0.981) with a manageable 63 MB model and 21.4 FPS. It combines transformer-based accuracy with reasonable inference speed.
+1. **RT-DETR is the best overall detector** for PCB defect detection, achieving the highest test F1 (0.966), test mAP@0.5 (0.975), and strong precision (0.981) with a manageable 63 MB model and 8.6 FPS. It combines transformer-based accuracy with reasonable inference speed.
 
-2. **DEIMv2-L achieves the highest mAP@0.5:0.95** on both validation (0.812) and test sets (0.789), surpassing all other models at strict IoU thresholds. Its test mAP@0.5 of 0.973 is competitive with RT-DETR. The model is highly accurate but inference-heavy (17.6 FPS, 497 MB).
+2. **DEIMv2-L achieves the highest mAP@0.5:0.95** on both validation (0.812) and test sets (0.789), surpassing all other models at strict IoU thresholds. Its test mAP@0.5 of 0.973 is competitive with RT-DETR. The model is highly accurate with 27.8 FPS, though the 497 MB weight file is large.
 
 3. **Faster R-CNN is a strong runner-up** with test F1 = 0.944, the highest test recall (0.967), and good localization (mIoU = 0.871). Its test mAP@0.5 = 0.967 is competitive. It benefited enormously from extended training (F1: 0.628 → 0.965).
 
@@ -263,20 +263,20 @@ Test set results from the best checkpoints. All metrics computed using `eval_com
    - SME-YOLO showed modest gains (+1.0% mAP@0.5)
    - RT-DETR's mAP@0.5 was largely saturated at 20 epochs
 
-5. **YOLO-family models (SME-YOLO, YOLO26) are ideal for real-time deployment** with FPS > 90. SME-YOLO peaks at 96.1 FPS while maintaining test F1 = 0.941 and the best mIoU (0.886).
+5. **YOLO-family models (SME-YOLO, YOLO26) are ideal for real-time deployment** with FPS > 20. YOLO26 is the fastest at 28.9 FPS with the smallest model (5.1 MB), while SME-YOLO achieves the best mIoU (0.886) at 21.4 FPS.
 
 6. **ViT-Det underperforms expectations** despite being the largest model (101.6M params, 388 MB). At 50 epochs, it only reaches test F1 = 0.707 and mAP@0.5 = 0.805. The ViT backbone likely needs much more training data or longer schedules (100+ epochs) to fully leverage its capacity on the relatively small DeepPCB dataset.
 
-7. **Speed-accuracy trade-off is clear:** SME-YOLO (96 FPS, mAP50 = 0.967) → YOLO26 (91 FPS, mAP50 = 0.927) → Faster R-CNN (37.6 FPS, mAP50 = 0.967) → ViT-Det (29.1 FPS, mAP50 = 0.805) → RT-DETR (21.4 FPS, mAP50 = 0.975) → DEIMv2-L (17.6 FPS, mAP50 = 0.973).
+7. **Speed-accuracy trade-off is clear:** YOLO26 (28.9 FPS, mAP50 = 0.927) → DEIMv2-L (27.8 FPS, mAP50 = 0.973) → SME-YOLO (21.4 FPS, mAP50 = 0.967) → RT-DETR (8.6 FPS, mAP50 = 0.975) → Faster R-CNN (3.9 FPS, mAP50 = 0.967) → ViT-Det (3.8 FPS, mAP50 = 0.805).
 
 ### Recommendations
 
 | Deployment Scenario | Recommended Model | Rationale |
 |---|---|---|
-| **Edge / Real-time (>90 FPS)** | SME-YOLO | Best accuracy among fast models (5.2 MB, 96 FPS, F1=0.941) |
-| **Balanced accuracy + speed** | RT-DETR | Highest F1 (0.966) with reasonable 21.4 FPS |
-| **Maximum accuracy (offline)** | DEIMv2-L | Top mAP@0.5:0.95 = 0.789, best strict-IoU performance |
-| **Minimal compute / mobile** | YOLO26 | Smallest model (5.1 MB, 2.5M params, 91 FPS) |
+| **Edge / Real-time (>20 FPS)** | YOLO26 or SME-YOLO | Smallest models (5 MB), 21–29 FPS, F1 > 0.87 |
+| **Balanced accuracy + speed** | DEIMv2-L | High mAP@0.5:0.95 (0.789) with 27.8 FPS |
+| **Maximum accuracy (offline)** | RT-DETR | Top test F1 (0.966) and mAP@0.5 (0.975) |
+| **Minimal compute / mobile** | YOLO26 | Smallest model (5.1 MB, 2.5M params) |
 | **Highest recall (miss nothing)** | Faster R-CNN | Best recall = 0.967 with F1 = 0.944 |
 
 ---
@@ -343,10 +343,10 @@ Test set results from the best checkpoints. All metrics computed using `eval_com
 conda activate pcb
 
 # 1. Train all models (20 epochs)
-bash run_all_models.sh
+bash scripts/run_all_models.sh
 
 # 2. Resume training to 50 epochs
-bash run_resume_50ep.sh
+bash scripts/run_resume_50ep.sh
 
 # 3. Run inference demo (speed benchmarks + annotated images)
 python inference_demo.py --models sme_yolo yolo26 faster_rcnn vit_det rt_detr deimv2_l

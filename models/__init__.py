@@ -4,9 +4,9 @@ supported architecture.
 
 Model categories
 ----------------
-PyTorch-loop:   faster_rcnn, faster_rcnn_ft, vit_det, vit_mamba
-Ultralytics:    yolo26, sme_yolo, rt_detr
-DEIMv2:         deimv2_l, deimv2_x  (subprocess via DEIMv2/train.py)
+PyTorch-loop:   faster_rcnn, vit_det
+Ultralytics:    sme_yolo, yolo26, rt_detr
+DEIMv2:         deimv2_l  (subprocess via DEIMv2/train.py)
 """
 
 from config import NUM_CLASSES, USE_PRETRAINED
@@ -15,16 +15,13 @@ from config import NUM_CLASSES, USE_PRETRAINED
 _MODEL_BUILDERS = {
     # PyTorch training loop models
     'faster_rcnn':    'models.faster_rcnn',
-    'faster_rcnn_ft': 'models.faster_rcnn_ft',
     'vit_det':        'models.vit_det',
-    'vit_mamba':      'models.vit_mamba',
     # Ultralytics models
-    'yolo26':         'models.yolo26',
     'sme_yolo':       'models.sme_yolo',
+    'yolo26':         'models.yolo26',
     'rt_detr':        'models.rt_detr',
     # DEIMv2 models (subprocess via DEIMv2/train.py)
     'deimv2_l':       'models.deimv2_l',
-    'deimv2_x':       'models.deimv2_x',
 }
 
 AVAILABLE_MODELS = list(_MODEL_BUILDERS.keys())

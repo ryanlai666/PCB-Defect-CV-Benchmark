@@ -1,57 +1,54 @@
-# ─── External Model Repos (tracked separately, not committed here) ────────────
-# DEIMv2 and DINOv3 are cloned/placed manually — see README.md
+# ─── Archive / Backup (old, unused, exploratory files) ────────────────────────
+_archive/
+
+# ─── External Model Repos (cloned/placed manually — see README.md) ───────────
 DEIMv2/
 dinov3/
 
 # ─── Datasets ─────────────────────────────────────────────────────────────────
+# Raw / original datasets
 Bridge_Crack_Image/
 CrackForest/
 DeepPCB/
 Magnetic-Tile-Defect/
-archive.zip
 
-# Converted COCO dataset cache (regeneratable via scripts/convert_deeppcb_to_coco.py)
+# Converted datasets
 data/deeppcb_coco/
+pcb_yolo_dataset/
 
 # ─── Model Checkpoints & Weights ──────────────────────────────────────────────
-# Individual pretrained weights / best-model files
 *.pth
 *.pt
 *.engine
 *.onnx
 
-# DEIMv2 checkpoint symlink dir
-DEIMv2/ckpts/
-
-# ─── Outputs, Logs, and Runs ──────────────────────────────────────────────────
-logs/
+# ─── Outputs, Logs, Runs, and Results ─────────────────────────────────────────
 outputs/
+logs/
 runs/
 results/
 *.log
 
-# Backup snapshots of training runs (for comparison)
+# Backup snapshots (any naming pattern)
 outputs_*_backup/
 logs_*_backup/
 results_*_backup/
-
-# DEIMv2 own output dir (generated inside DEIMv2/)
-DEIMv2/outputs/
 
 # ─── Python Cache ─────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 
-# ─── Jupyter Notebook checkpoints ─────────────────────────────────────────────
+# ─── Jupyter Notebook ─────────────────────────────────────────────────────────
 .ipynb_checkpoints/
+*.ipynb
 
 # ─── Virtual Environments ─────────────────────────────────────────────────────
 venv/
 env/
 .env
 
-# ─── Editor / IDE ─────────────────────────────────────────────────────────────
+# ─── Editor / IDE / OS ────────────────────────────────────────────────────────
 .vscode/
 .idea/
 .DS_Store
