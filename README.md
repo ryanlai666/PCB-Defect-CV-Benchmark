@@ -19,10 +19,6 @@ comparing multiple deep-learning model architectures on the
 | `rt_detr` | RT-DETR-L | ResNet-based | Ultralytics | 0.975 | 27.1 | Zhao et al., CVPR 2024 |
 | `deimv2_l` | **DEIMv2-L** | **DINOv3-S** | DEIMv2 / torchrun | 0.973 | 19.9 | Huang et al., 2025 |
 
-DEIMv2-L is a state-of-the-art real-time object detector that combines a
-DEIM-style DETR decoder with a DINOv3 vision-foundation backbone
-(see [`DEIMv2/README.md`](DEIMv2/README.md)).
-
 ### Inference Demo
 
 Below is an actual cross-model inference comparison on the test set:
