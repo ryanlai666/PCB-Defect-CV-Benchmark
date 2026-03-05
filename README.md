@@ -8,18 +8,23 @@ comparing multiple deep-learning model architectures on the
 
 ## Supported Models
 
-| ID | Model | Backbone | Training engine |
-|----|-------|----------|-----------------|
-| `faster_rcnn` | Faster R-CNN | ResNet-50-FPN v2 | PyTorch |
-| `vit_det` | ViT-Det | ViT-Base/16 + FPN | PyTorch |
-| `sme_yolo` | SME-YOLO | YOLOv11n (CSPDarknet) | Ultralytics |
-| `yolo26` | YOLO26 | YOLO26n | Ultralytics |
-| `rt_detr` | RT-DETR-L | ResNet-based | Ultralytics |
-| `deimv2_l` | **DEIMv2-L** | **DINOv3-S** | DEIMv2 / torchrun |
+| ID | Model | Backbone | Training engine | Test mAP@0.5 | FPS |
+|----|-------|----------|-----------------|--------------|-----|
+| `faster_rcnn` | Faster R-CNN | ResNet-50-FPN v2 | PyTorch | 0.967 | 37.3 |
+| `vit_det` | ViT-Det | ViT-Base/16 + FPN | PyTorch | 0.805 | 28.7 |
+| `sme_yolo` | SME-YOLO | YOLOv11n (CSPDarknet) | Ultralytics | 0.967 | 93.6 |
+| `yolo26` | YOLO26 | YOLO26n | Ultralytics | 0.927 | 89.7 |
+| `rt_detr` | RT-DETR-L | ResNet-based | Ultralytics | 0.975 | 27.1 |
+| `deimv2_l` | **DEIMv2-L** | **DINOv3-S** | DEIMv2 / torchrun | 0.973 | 19.9 |
 
 DEIMv2-L is a state-of-the-art real-time object detector that combines a
 DEIM-style DETR decoder with a DINOv3 vision-foundation backbone
 (see [`DEIMv2/README.md`](DEIMv2/README.md)).
+
+### Inference Demo
+
+Below is an actual cross-model inference comparison on the test set:
+![Inference Demo](results/grid_demo_comparison_00041210_test.jpg)
 
 ---
 
@@ -27,14 +32,9 @@ DEIM-style DETR decoder with a DINOv3 vision-foundation backbone
 
 Located at `DeepPCB/PCBData/`. Six defect classes:
 
-| ID | Name |
-|----|------|
-| 1  | open |
-| 2  | short |
-| 3  | mousebite |
-| 4  | spur |
-| 5  | copper |
-| 6  | pin-hole |
+| ID | 1 | 2 | 3 | 4 | 5 | 6 |
+|----|---|---|---|---|---|---|
+| **Name** | open | short | mousebite | spur | copper | pin-hole |
 
 Images are 640 × 640 px. Annotations are per-image `.txt` files in
 `x1,y1,x2,y2,type` format. See [`DeepPCB/README.md`](DeepPCB/README.md).
