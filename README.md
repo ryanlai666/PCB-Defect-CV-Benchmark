@@ -43,11 +43,7 @@ Images are 640 × 640 px. Annotations are per-image `.txt` files in
 
 ---
 
-## External Dependencies (not tracked by git)
-
-> [!IMPORTANT]
-> The following directories must be **cloned / placed manually** —  
-> they are excluded from this repository via `.gitignore`.
+## External Dependencies that required manual installation
 
 ### `DEIMv2/`
 Real-time object detection framework using DINOv3 features.
