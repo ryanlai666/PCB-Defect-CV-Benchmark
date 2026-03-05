@@ -289,15 +289,3 @@ PCB_wafer_defect_detection/
 
 ---
 
-## Citation
-
-If you use DEIMv2 or DINOv3 in your work, please cite:
-
-```bibtex
-@article{huang2025deimv2,
-  title={Real-Time Object Detection Meets DINOv3},
-  author={Huang, Shihua and Hou, Yongjie and Liu, Longfei and Yu, Xuanlong and Shen, Xi},
-  journal={arXiv},
-  year={2025}
-}
-```
