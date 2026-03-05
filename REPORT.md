@@ -117,7 +117,7 @@ These models track **Precision, Recall, mAP@0.5, mAP@0.5:0.95** from Ultralytics
 | @Epoch 20 | 0.9620 | 0.9280 | 0.9447 | 0.9742 | 0.7126 |
 | @Epoch 50 (last) | 0.9776 | 0.9405 | 0.9587 | **0.9839** | 0.6934 |
 | @Best mAP50 (ep 50) | 0.9776 | 0.9405 | 0.9587 | **0.9839** | 0.6934 |
-| @Best mAP50-95 (ep 46) | 0.9828 | 0.9405 | — | 0.9828 | **0.7350** |
+| @Best mAP50-95 (ep 46) | 0.9828 | 0.9405 | 0.9612 | 0.9828 | **0.7350** |
 
 > **Takeaway:** SME-YOLO improved mAP@0.5 from 0.974→0.984 with extended training. Best mAP@0.5:0.95 peaked at epoch 46 (0.735), slightly higher than the 20-epoch result.
 
@@ -161,7 +161,7 @@ DEIMv2 uses COCO-style AP metrics on the validation set.
 
 Test set results from the best checkpoints. All metrics computed using `eval_compare.py --run_test`.
 
-### 6.1 Comprehensive Test Metrics
+### 6.1 Comprehensive Test Metrics (with 50 epochs model weights)
 
 | Model | Epochs | Precision | Recall | F1-Score | mIoU | mAP@0.5 | mAP@0.5:0.95 |
 |---|---|---|---|---|---|---|---|
@@ -206,9 +206,6 @@ Test set results from the best checkpoints. All metrics computed using `eval_com
 
 | Model | Metric | @20 Epochs | @50 Epochs (best) | Δ Improvement |
 |---|---|---|---|---|
-| **Faster R-CNN** | Val F1 | 0.628 (1 ep) | **0.965** (ep 37) | **+0.337 (+53.6%)** |
-| **Faster R-CNN** | Val mIoU | 0.766 (1 ep) | **0.880** (ep 31) | **+0.115 (+15.0%)** |
-| **Faster R-CNN** | Test F1 | — | **0.944** | — |
 | **SME-YOLO** | Val mAP@0.5 | 0.9742 | **0.9839** (ep 50) | **+0.010 (+1.0%)** |
 | **SME-YOLO** | Val mAP@0.5:0.95 | 0.7126 | **0.7350** (ep 46) | **+0.022 (+3.1%)** |
 | **YOLO26** | Val mAP@0.5 | 0.9136 | **0.9556** (ep 48) | **+0.042 (+4.6%)** |
@@ -281,62 +278,8 @@ Test set results from the best checkpoints. All metrics computed using `eval_com
 
 ---
 
-## Appendix A: Epoch-Level Summary of All Models
 
-### A.1 Faster R-CNN — Validation Progress (50 epochs)
-
-| Epoch | Val Precision | Val Recall | Val F1 | Val mIoU |
-|---|---|---|---|---|
-| 1 | 0.5155 | 0.8033 | 0.6280 | 0.7655 |
-| 20 | 0.8770 | 0.9793 | 0.9253 | 0.8424 |
-| 31 (best mIoU) | 0.8925 | 0.9793 | 0.9339 | **0.8804** |
-| 37 (best F1) | **0.9560** | 0.9738 | **0.9648** | 0.8709 |
-| 50 (last) | 0.9423 | 0.9807 | 0.9611 | 0.8741 |
-
-### A.2 ViT-Det — Validation Progress (50 epochs)
-
-| Epoch | Val Precision | Val Recall | Val F1 | Val mIoU |
-|---|---|---|---|---|
-| 20 | 0.6688 | 0.7778 | 0.7192 | 0.7405 |
-| 49 (best F1) | 0.7014 | **0.8496** | **0.7684** | 0.7734 |
-| 50 (last) | **0.7043** | 0.8447 | 0.7681 | **0.7788** |
-
-### A.3 SME-YOLO — Validation Progress (50 epochs)
-
-| Epoch | Precision | Recall | mAP@0.5 | mAP@0.5:0.95 |
-|---|---|---|---|---|
-| 20 | 0.9620 | 0.9280 | 0.9742 | 0.7126 |
-| 46 (best mAP50-95) | 0.9828 | 0.9405 | 0.9828 | **0.7350** |
-| 50 (last/best mAP50) | 0.9776 | 0.9405 | **0.9839** | 0.6934 |
-
-### A.4 YOLO26 — Validation Progress (50 epochs)
-
-| Epoch | Precision | Recall | mAP@0.5 | mAP@0.5:0.95 |
-|---|---|---|---|---|
-| 20 | 0.8670 | 0.8309 | 0.9136 | 0.6587 |
-| 48 (best overall) | 0.8883 | 0.9004 | **0.9556** | **0.7089** |
-| 50 (last) | 0.8883 | 0.9004 | 0.9551 | 0.6809 |
-
-### A.5 RT-DETR — Validation Progress (50 epochs)
-
-| Epoch | Precision | Recall | mAP@0.5 | mAP@0.5:0.95 |
-|---|---|---|---|---|
-| 14 (best mAP50-95) | 0.9772 | 0.9539 | 0.9828 | **0.7464** |
-| 20 | 0.9847 | 0.9598 | 0.9864 | 0.6761 |
-| 45 (best mAP50) | 0.9884 | 0.9610 | **0.9872** | 0.6134 |
-| 50 (last) | 0.9884 | 0.9610 | 0.9862 | 0.6050 |
-
-### A.6 DEIMv2-L — Validation Progress (COCO eval, 50 epochs)
-
-| Epoch | mAP@0.5:0.95 | mAP@0.5 | mAP@0.75 |
-|---|---|---|---|
-| 20 | 0.7168 | 0.9697 | 0.8642 |
-| 28 (best overall) | **0.8115** | **0.9909** | 0.9278 |
-| 50 (last) | 0.7924 | 0.9871 | 0.9242 |
-
----
-
-## Appendix B: How to Reproduce
+## Appendix A: How to Reproduce
 
 ```bash
 # Activate environment

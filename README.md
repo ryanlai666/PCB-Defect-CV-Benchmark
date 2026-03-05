@@ -225,29 +225,6 @@ flowchart TD
         EC_Tables --> EC_Save["Save CSV + JSON<br/>results/comparison_table.*"]
     end
 
-    subgraph parse_logs ["parse_logs.py"]
-        PL_Start["For each model:"] --> PL_Load{"Model type?"}
-        PL_Load -->|PyTorch| PL_PT["load_pytorch_history()<br/>→ parse history JSON"]
-        PL_Load -->|Ultralytics| PL_UL["load_ultralytics_results()<br/>→ parse results.csv"]
-        PL_Load -->|DEIMv2| PL_DM["load_deimv2_history()<br/>→ parse log.txt JSON lines"]
-        PL_PT --> PL_Plot
-        PL_UL --> PL_Plot
-        PL_DM --> PL_Plot
-        PL_Plot["Plotting:<br/>• plot_individual_model()<br/>  (loss + val metrics per model)<br/>• plot_comparison()<br/>  (overlay all models)"]
-        PL_Plot --> PL_Save["Save PNGs to<br/>results/plots/"]
-    end
-
-    subgraph infer ["inference_demo.py"]
-        INF_Start["Resolve best weights<br/>for each model"] --> INF_Run{"Model type?"}
-        INF_Run -->|PyTorch| INF_PT["run_pytorch_inference()<br/>→ GPU-synced timing"]
-        INF_Run -->|Ultralytics| INF_UL["run_ultralytics_inference()<br/>→ per-image predict()"]
-        INF_Run -->|DEIMv2| INF_DM["run_deimv2_inference()<br/>→ CUDA event timing"]
-        INF_PT --> INF_Summary
-        INF_UL --> INF_Summary
-        INF_DM --> INF_Summary
-        INF_Summary["Compute stats:<br/>• mean/median/p95 latency<br/>• FPS<br/>Save inference_summary.json<br/>+ annotated images"]
-    end
-
     %% Invisible links to force vertical stacking of subgraphs
     EC_Save ~~~ PL_Start
     PL_Save ~~~ INF_Start
