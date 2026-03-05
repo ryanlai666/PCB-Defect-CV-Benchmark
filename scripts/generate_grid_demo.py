@@ -18,7 +18,7 @@ sme_files.sort()
 indices = []
 for f in sme_files:
     basename = os.path.basename(f)
-    idx = basename.split('_')[-1].split('.')[0]
+    idx = basename.replace('sme_yolo_', '').replace('.jpg', '')
     indices.append(idx)
 
 # select a few distinct ones

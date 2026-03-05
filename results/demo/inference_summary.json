@@ -1,32 +1,32 @@
 {
   "SME-YOLO": {
-    "avg_latency_ms": 46.71,
-    "fps": 21.41,
-    "num_images": 190
+    "avg_latency_ms": 10.68,
+    "fps": 93.61,
+    "num_images": 495
   },
   "YOLO26": {
-    "avg_latency_ms": 34.55,
-    "fps": 28.94,
-    "num_images": 190
+    "avg_latency_ms": 11.14,
+    "fps": 89.74,
+    "num_images": 495
   },
   "Faster R-CNN": {
-    "avg_latency_ms": 257.97,
-    "fps": 3.88,
-    "num_images": 490
+    "avg_latency_ms": 26.81,
+    "fps": 37.31,
+    "num_images": 495
   },
   "ViT-Det": {
-    "avg_latency_ms": 266.24,
-    "fps": 3.76,
-    "num_images": 490
+    "avg_latency_ms": 34.9,
+    "fps": 28.65,
+    "num_images": 495
   },
   "RT-DETR": {
-    "avg_latency_ms": 116.36,
-    "fps": 8.59,
-    "num_images": 190
+    "avg_latency_ms": 36.97,
+    "fps": 27.05,
+    "num_images": 495
   },
   "DEIMv2-L": {
-    "avg_latency_ms": 35.98,
-    "fps": 27.79,
+    "avg_latency_ms": 50.26,
+    "fps": 19.9,
     "num_images": 495
   }
 }

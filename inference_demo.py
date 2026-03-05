@@ -100,11 +100,11 @@ def get_test_images_frcnn(data_dir):
     return pairs
 
 
-def get_test_images_yolo(yolo_data_dir, split='val'):
+def get_test_images_yolo(yolo_data_dir, split='test'):
     """Return sorted list of image paths from the YOLO dataset."""
     img_dir = os.path.join(yolo_data_dir, 'images', split)
     if not os.path.isdir(img_dir):
-        img_dir = os.path.join(yolo_data_dir, 'images', 'test')
+        img_dir = os.path.join(yolo_data_dir, 'images', 'val')
     exts = {'.jpg', '.jpeg', '.png', '.bmp'}
     images = sorted([
         os.path.join(img_dir, f) for f in os.listdir(img_dir)
@@ -172,7 +172,8 @@ def run_pytorch_inference(model_name, model_path, test_pairs, output_dir,
             img_bgr   = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
             annotated = draw_boxes(img_bgr, boxes, labels, scores,
                                    FRCNN_CLASS_NAMES, score_thresh)
-            out_path = os.path.join(output_dir, f'{prefix}_{idx:04d}.jpg')
+            base_name = os.path.splitext(os.path.basename(img_path))[0]
+            out_path = os.path.join(output_dir, f'{prefix}_{base_name}.jpg')
             cv2.imwrite(out_path, annotated)
 
     return latencies
@@ -224,7 +225,8 @@ def run_ultralytics_inference(model_name, weight_path, image_paths, output_dir,
         else:
             annotated = img_bgr
 
-        out_path = os.path.join(output_dir, f'{model_name}_{idx:04d}.jpg')
+        base_name = os.path.splitext(os.path.basename(img_path))[0]
+        out_path = os.path.join(output_dir, f'{model_name}_{base_name}.jpg')
         cv2.imwrite(out_path, annotated)
 
     return latencies
@@ -262,6 +264,7 @@ def run_deimv2_inference(model_name, output_dir, num_warmup=10,
         from engine.core import YAMLConfig
         cfg = YAMLConfig(config_path, resume=best_ckpt)
         model = cfg.model
+        postprocessor = cfg.postprocessor.eval().to(DEVICE)
         ckpt  = torch.load(best_ckpt, map_location='cpu', weights_only=False)
         # Load from EMA if available (gives best weights)
         if 'ema' in ckpt and isinstance(ckpt['ema'], dict):
@@ -335,21 +338,28 @@ def run_deimv2_inference(model_name, output_dir, num_warmup=10,
             t1 = time.perf_counter()
             latencies.append((t1 - t0) * 1000)  # ms
 
+            # Process via DEIMv2 postprocessor
+            preds = postprocessor(outputs, orig_size)[0]
+            
             # Draw predictions
             img_bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
             try:
-                labels = outputs['labels'][0].cpu().numpy()
-                boxes  = outputs['boxes'][0].cpu().numpy()   # xyxy in orig coords
-                scores = outputs['scores'][0].cpu().numpy()
+                # DEIMv2 COCO classes are naturally 0-indexed for display in DeepPCB mappings
+                # (although internal evaluator handles offset)
+                labels = preds['labels'].cpu().numpy()
+                boxes  = preds['boxes'].cpu().numpy()   # xyxy in orig coords
+                scores = preds['scores'].cpu().numpy()
                 annotated = draw_boxes(
-                    img_bgr, boxes, labels - 1, scores,   # DEIMv2 labels are 1-indexed
+                    img_bgr, boxes, labels, scores,
                     YOLO_CLASS_NAMES, score_thresh
                 )
-            except Exception:
+            except Exception as e:
+                print(f"DEIMv2 box err: {e}")
                 annotated = img_bgr
 
+            base_name = os.path.splitext(os.path.basename(img_path))[0]
             out_path = os.path.join(
-                output_dir_out, f'deimv2_l_{idx:04d}.jpg'
+                output_dir_out, f'deimv2_l_{base_name}.jpg'
             )
             cv2.imwrite(out_path, annotated)
 
