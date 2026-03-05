@@ -5,9 +5,12 @@ Override any values in the Colab notebook before importing other modules.
 
 import torch
 
+import os
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # ─── Dataset ────────────────────────────────────────────────────────────────
-DATA_DIR = '/home/yuhsuanho/Ryan/PCB_wafer_defect_detection/DeepPCB/PCBData/'
-YOLO_DATA_DIR = '/home/yuhsuanho/Ryan/PCB_wafer_defect_detection/pcb_yolo_dataset'  # converted YOLO-format output
+DATA_DIR = os.path.join(PROJECT_DIR, 'DeepPCB/PCBData/')
+YOLO_DATA_DIR = os.path.join(PROJECT_DIR, 'pcb_yolo_dataset')  # converted YOLO-format output
 
 # ─── Classes ────────────────────────────────────────────────────────────────
 NUM_CLASSES = 7  # 6 defect types + 1 background

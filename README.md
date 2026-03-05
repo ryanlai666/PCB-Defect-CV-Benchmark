@@ -137,6 +137,124 @@ python inference_demo.py    # speed benchmark
 
 ---
 
+## Code Flowcharts
+
+### Overall Pipeline
+
+```mermaid
+flowchart LR
+    A["DeepPCB Dataset<br/>(640×640 images)"] --> B["Dataset Conversion"]
+    B --> C["Training<br/>train_model.py"]
+    C --> D["Best Checkpoints<br/>outputs/&lt;model&gt;/"]
+    D --> E["Evaluation<br/>eval_compare.py"]
+    D --> F["Speed Benchmark<br/>inference_demo.py"]
+    D --> G["Log Parsing<br/>parse_logs.py"]
+    E --> H["Comparison Tables<br/>(CSV + JSON)"]
+    F --> I["Latency / FPS<br/>Summary"]
+    G --> J["Training Curves<br/>(PNG plots)"]
+
+    style A fill:#4a9eff,color:#fff
+    style C fill:#ff6b6b,color:#fff
+    style E fill:#51cf66,color:#fff
+    style F fill:#51cf66,color:#fff
+    style G fill:#51cf66,color:#fff
+```
+
+### Training Pipeline  (`train_model.py`)
+
+```mermaid
+flowchart TD
+    Start(["python train_model.py --model &lt;name&gt;"]) --> Parse["Parse CLI args<br/>(model, epochs, batch_size,<br/>test_mode, resume)"]
+    Parse --> SetOutput["Set output dir<br/>outputs/&lt;model&gt;/"]
+    SetOutput --> Config["Load config.py<br/>(DATA_DIR, hyperparams, DEVICE)"]
+    Config --> Registry["create_model(name)<br/>models/__init__.py registry"]
+
+    Registry --> Branch{Model type?}
+
+    %% ── PyTorch branch ──
+    Branch -->|"PyTorch<br/>(faster_rcnn, vit_det)"| DS_PT["dataset.py<br/>create_dataloaders()<br/>train / val / test splits"]
+    DS_PT --> ResumePT{"--resume?"}
+    ResumePT -->|Yes| LoadCkpt["Load last_ckpt / best .pth<br/>+ infer start_epoch"]
+    ResumePT -->|No| TrainPT
+    LoadCkpt --> TrainPT["training.py → train_model()<br/>• train_one_epoch() per epoch<br/>• validate() each epoch<br/>• cosine-annealing LR<br/>• best-model checkpointing"]
+    TrainPT --> TestPT["Test-set evaluation<br/>• validate() → P, R, F1, mIoU<br/>• compute_map() → mAP50, mAP50-95"]
+    TestPT --> SavePT["Save history JSON<br/>+ test_metrics JSON<br/>+ best_&lt;model&gt;.pth"]
+
+    %% ── Ultralytics branch ──
+    Branch -->|"Ultralytics<br/>(sme_yolo, yolo26, rt_detr)"| DS_UL["utils.py<br/>convert_deeppcb_to_yolo()<br/>→ YOLO-format dirs + data.yaml"]
+    DS_UL --> ResumeUL{"--resume?"}
+    ResumeUL -->|Yes| PatchPT["Patch last.pt<br/>(epochs + epoch marker)"]
+    PatchPT --> TrainUL
+    ResumeUL -->|No| TrainUL["model.train()<br/>(Ultralytics engine)<br/>→ runs/&lt;model&gt;/weights/"]
+    TrainUL --> CopyBest["Copy best.pt → best_&lt;model&gt;.pth"]
+    CopyBest --> ValUL["model.val()"]
+
+    %% ── DEIMv2 branch ──
+    Branch -->|"DEIMv2<br/>(deimv2_l)"| DS_COCO["scripts/convert_deeppcb_to_coco.py<br/>→ COCO JSON + symlinked images"]
+    DS_COCO --> ResumeDEIM{"--resume?"}
+    ResumeDEIM -->|Yes| ResDEIM["--resume=last.pth"]
+    ResumeDEIM -->|No| TrainDEIM
+    ResDEIM --> TrainDEIM["torchrun DEIMv2/train.py<br/>-c config.yml --use-amp"]
+    TrainDEIM --> SaveDEIM["Checkpoints in outputs/deimv2_l/<br/>(last.pth, best_stg2.pth)"]
+
+    SavePT --> Done(["Training Complete"])
+    ValUL --> Done
+    SaveDEIM --> Done
+
+    style Start fill:#4a9eff,color:#fff
+    style Branch fill:#ffd43b,color:#333
+    style Done fill:#51cf66,color:#fff
+```
+
+### Evaluation & Reporting Pipeline
+
+```mermaid
+flowchart TD
+    subgraph eval_compare ["eval_compare.py"]
+        EC_Start["Load MODEL_META<br/>(6 models)"] --> EC_Loop["For each model:"]
+        EC_Loop --> EC_Metrics{"Model type?"}
+        EC_Metrics -->|PyTorch| EC_PT["get_pytorch_metrics()<br/>→ load test_metrics JSON<br/>run_pytorch_test_eval() if missing"]
+        EC_Metrics -->|Ultralytics| EC_UL["get_ultralytics_metrics()<br/>→ parse results.csv<br/>run_ultralytics_test_eval() if needed"]
+        EC_Metrics -->|DEIMv2| EC_DM["get_deimv2_metrics()<br/>→ parse COCO eval from log.txt<br/>run_deimv2_test_eval() if needed"]
+        EC_PT --> EC_Complexity["get_model_complexity()<br/>→ params, GFLOPs"]
+        EC_UL --> EC_Complexity
+        EC_DM --> EC_ComplexDEIM["get_deimv2_complexity()<br/>→ params, GFLOPs via thop"]
+        EC_Complexity --> EC_Speed["load_inference_summary()<br/>→ FPS, latency"]
+        EC_ComplexDEIM --> EC_Speed
+        EC_Speed --> EC_Tables["Print tables:<br/>• Architecture & Complexity<br/>• Detection Accuracy<br/>• Inference Speed"]
+        EC_Tables --> EC_Save["Save CSV + JSON<br/>results/comparison_table.*"]
+    end
+
+    subgraph parse_logs ["parse_logs.py"]
+        PL_Start["For each model:"] --> PL_Load{"Model type?"}
+        PL_Load -->|PyTorch| PL_PT["load_pytorch_history()<br/>→ parse history JSON"]
+        PL_Load -->|Ultralytics| PL_UL["load_ultralytics_results()<br/>→ parse results.csv"]
+        PL_Load -->|DEIMv2| PL_DM["load_deimv2_history()<br/>→ parse log.txt JSON lines"]
+        PL_PT --> PL_Plot
+        PL_UL --> PL_Plot
+        PL_DM --> PL_Plot
+        PL_Plot["Plotting:<br/>• plot_individual_model()<br/>  (loss + val metrics per model)<br/>• plot_comparison()<br/>  (overlay all models)"]
+        PL_Plot --> PL_Save["Save PNGs to<br/>results/plots/"]
+    end
+
+    subgraph infer ["inference_demo.py"]
+        INF_Start["Resolve best weights<br/>for each model"] --> INF_Run{"Model type?"}
+        INF_Run -->|PyTorch| INF_PT["run_pytorch_inference()<br/>→ GPU-synced timing"]
+        INF_Run -->|Ultralytics| INF_UL["run_ultralytics_inference()<br/>→ per-image predict()"]
+        INF_Run -->|DEIMv2| INF_DM["run_deimv2_inference()<br/>→ CUDA event timing"]
+        INF_PT --> INF_Summary
+        INF_UL --> INF_Summary
+        INF_DM --> INF_Summary
+        INF_Summary["Compute stats:<br/>• mean/median/p95 latency<br/>• FPS<br/>Save inference_summary.json<br/>+ annotated images"]
+    end
+
+    style eval_compare fill:#e8f5e9,stroke:#43a047
+    style parse_logs fill:#e3f2fd,stroke:#1e88e5
+    style infer fill:#fff3e0,stroke:#fb8c00
+```
+
+---
+
 ## Directory Structure
 
 ```

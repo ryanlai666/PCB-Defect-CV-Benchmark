@@ -72,7 +72,7 @@ log_separator() {
 # ─── Conda activation ───────────────────────────────────────────────────────
 # Source conda so we can activate the environment
 # Note: set +u is needed because some conda hook scripts reference unset variables
-CONDA_BASE="$(conda info --base 2>/dev/null || echo '/home/yuhsuanho/anaconda3')"
+CONDA_BASE="$(conda info --base 2>/dev/null || echo '$HOME/anaconda3')"
 set +u
 source "${CONDA_BASE}/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV}"
