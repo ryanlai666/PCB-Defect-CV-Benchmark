@@ -12,11 +12,11 @@ This report presents a comprehensive comparison of **six** object detection arch
 | # | Model | Type | Backbone | Reference |
 |---|---|---|---|---|
 | 1 | **Faster R-CNN** | Two-stage | ResNet-50 FPN v2 | Ren et al., NeurIPS 2015 |
-| 2 | **SME-YOLO** | One-stage | YOLOv11n (CSPDarknet) | arxiv 2601.11402 |
+| 2 | **SME-YOLO** | One-stage | YOLOv11n (CSPDarknet) | arXiv:2601.11402 |
 | 3 | **YOLO26** | One-stage | YOLO26n | Ultralytics docs |
 | 4 | **ViT-Det** | Two-stage | ViT-Base/16 + FPN | Li et al., ECCV 2022 |
 | 5 | **RT-DETR** | Transformer | RT-DETR-L (ResNet-based) | Zhao et al., CVPR 2024 |
-| 6 | **DEIMv2-L** | Transformer | DINOv3-S | DEIMv2 (arxiv) |
+| 6 | **DEIMv2-L** | Transformer | DINOv3-S | Huang et al., 2025 |
 
 ### Dataset Summary
 
@@ -78,6 +78,10 @@ This report presents a comprehensive comparison of **six** object detection arch
 ---
 
 ## 5. Validation Performance
+
+The following plots showcase the learning curves (Precision, Recall, mAP@0.5, and F1/mIoU) compared across all six architectures over the 50 epochs of training:
+
+![Validation Performance Curves](results/plots/comparison_curves.png)
 
 ### 5.1 PyTorch-Loop Models (Faster R-CNN, ViT-Det)
 
@@ -305,3 +309,15 @@ python eval_compare.py --run_test
 ```
 
 All outputs are saved to the `results/` directory.
+
+---
+
+## Appendix B: References
+
+* **Faster R-CNN**: Ren, S., He, K., Girshick, R., & Sun, J. (2015). Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks. *Advances in Neural Information Processing Systems, 28*.
+* **ViT-Det**: Li, Y., Mao, H., Girshick, R., & He, K. (2022). Exploring Plain Vision Transformer Backbones for Object Detection. *European Conference on Computer Vision (ECCV)*.
+* **SME-YOLO**: SME-YOLO: Small and Micro object Detection via CSPDarknet (2026). *arXiv preprint arXiv:2601.11402*.
+* **YOLO26 (Ultralytics)**: Jocher, G., Chaurasia, A., & Qiu, J. (2023). *Ultralytics YOLO*. https://github.com/ultralytics/ultralytics.
+* **RT-DETR**: Zhao, Y., Lv, W., Xu, S., Wei, J., Wang, G., Dang, Q., Liu, Y., & Chen, J. (2024). DETRs Beat YOLOs on Real-time Object Detection. *CVPR*.
+* **DEIMv2**: Huang, S., Hou, Y., Liu, L., Yu, X., & Shen, X. (2025). Real-Time Object Detection Meets DINOv3. *arXiv preprint*.
+* **DINOv3**: Siméoni, O., Vo, H. V., Seitzer, M., et al. (2025). DINOv3. *arXiv preprint*.
