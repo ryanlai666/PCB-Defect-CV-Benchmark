@@ -248,6 +248,10 @@ flowchart TD
         INF_Summary["Compute stats:<br/>• mean/median/p95 latency<br/>• FPS<br/>Save inference_summary.json<br/>+ annotated images"]
     end
 
+    %% Invisible links to force vertical stacking of subgraphs
+    EC_Save ~~~ PL_Start
+    PL_Save ~~~ INF_Start
+
     style eval_compare fill:#e8f5e9,stroke:#43a047
     style parse_logs fill:#e3f2fd,stroke:#1e88e5
     style infer fill:#fff3e0,stroke:#fb8c00
