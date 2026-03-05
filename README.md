@@ -8,14 +8,14 @@ comparing multiple deep-learning model architectures on the
 
 ## Supported Models
 
-| ID | Model | Backbone | Training engine | Test mAP@0.5 | FPS |
-|----|-------|----------|-----------------|--------------|-----|
-| `faster_rcnn` | Faster R-CNN | ResNet-50-FPN v2 | PyTorch | 0.967 | 37.3 |
-| `vit_det` | ViT-Det | ViT-Base/16 + FPN | PyTorch | 0.805 | 28.7 |
-| `sme_yolo` | SME-YOLO | YOLOv11n (CSPDarknet) | Ultralytics | 0.967 | 93.6 |
-| `yolo26` | YOLO26 | YOLO26n | Ultralytics | 0.927 | 89.7 |
-| `rt_detr` | RT-DETR-L | ResNet-based | Ultralytics | 0.975 | 27.1 |
-| `deimv2_l` | **DEIMv2-L** | **DINOv3-S** | DEIMv2 / torchrun | 0.973 | 19.9 |
+| ID | Model | Backbone | Training engine | Test mAP@0.5 | FPS | Reference |
+|----|-------|----------|-----------------|--------------|-----|-----------|
+| `faster_rcnn` | Faster R-CNN | ResNet-50-FPN v2 | PyTorch | 0.967 | 37.3 | Ren et al., NeurIPS 2015 |
+| `vit_det` | ViT-Det | ViT-Base/16 + FPN | PyTorch | 0.805 | 28.7 | Li et al., ECCV 2022 |
+| `sme_yolo` | SME-YOLO | YOLOv11n (CSPDarknet) | Ultralytics | 0.967 | 93.6 | arXiv:2601.11402 |
+| `yolo26` | YOLO26 | YOLO26n | Ultralytics | 0.927 | 89.7 | Ultralytics docs |
+| `rt_detr` | RT-DETR-L | ResNet-based | Ultralytics | 0.975 | 27.1 | Zhao et al., CVPR 2024 |
+| `deimv2_l` | **DEIMv2-L** | **DINOv3-S** | DEIMv2 / torchrun | 0.973 | 19.9 | Huang et al., 2025 |
 
 DEIMv2-L is a state-of-the-art real-time object detector that combines a
 DEIM-style DETR decoder with a DINOv3 vision-foundation backbone
@@ -288,4 +288,24 @@ PCB_wafer_defect_detection/
 ```
 
 ---
+
+## Citation
+
+If you use DEIMv2 or DINOv3 in your work, please cite:
+
+```bibtex
+@article{huang2025deimv2,
+  title={Real-Time Object Detection Meets DINOv3},
+  author={Huang, Shihua and Hou, Yongjie and Liu, Longfei and Yu, Xuanlong and Shen, Xi},
+  journal={arXiv},
+  year={2025}
+}
+
+@article{simeoni2025dinov3,
+  title={DINOv3},
+  author={Siméoni, Oriane and Vo, Huy V and Seitzer, Maximilian and others},
+  journal={arXiv},
+  year={2025}
+}
+```
 
