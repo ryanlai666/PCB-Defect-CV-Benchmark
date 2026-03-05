@@ -4,6 +4,8 @@ A research pipeline for PCB (Printed Circuit Board) defect detection,
 comparing multiple deep-learning model architectures on the
 [DeepPCB](https://github.com/tangsanli5201/DeepPCB) dataset.
 
+> **Report available**: For a comprehensive analysis, performance breakdown, and inference benchmarks, please refer to the detailed **[Model Comparison Report](REPORT.md)**.
+
 ---
 
 ## Supported Models
