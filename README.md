@@ -291,8 +291,9 @@ PCB_wafer_defect_detection/
 
 ## Citation
 
-If you use DEIMv2 or DINOv3 in your work, please cite:
+If you use this benchmark or the models in your work, please refer to the corresponding publications:
 
+### DEIMv2 & DINOv3
 ```bibtex
 @article{huang2025deimv2,
   title={Real-Time Object Detection Meets DINOv3},
@@ -306,6 +307,56 @@ If you use DEIMv2 or DINOv3 in your work, please cite:
   author={Siméoni, Oriane and Vo, Huy V and Seitzer, Maximilian and others},
   journal={arXiv},
   year={2025}
+}
+```
+
+### Faster R-CNN
+```bibtex
+@inproceedings{ren2015faster,
+  title={Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks},
+  author={Ren, Shaoqing and He, Kaiming and Girshick, Ross and Sun, Jian},
+  booktitle={Advances in Neural Information Processing Systems},
+  volume={28},
+  year={2015}
+}
+```
+
+### ViT-Det
+```bibtex
+@inproceedings{li2022exploring,
+  title={Exploring Plain Vision Transformer Backbones for Object Detection},
+  author={Li, Yanghao and Mao, Hanzi and Girshick, Ross and He, Kaiming},
+  booktitle={European Conference on Computer Vision (ECCV)},
+  year={2022}
+}
+```
+
+### SME-YOLO
+```bibtex
+@article{smeyolo2026,
+  title={SME-YOLO: Small and Micro object Detection via CSPDarknet},
+  journal={arXiv preprint arXiv:2601.11402},
+  year={2026}
+}
+```
+
+### RT-DETR
+```bibtex
+@inproceedings{zhao2024detrs,
+  title={DETRs Beat YOLOs on Real-time Object Detection},
+  author={Zhao, Yian and Lv, Wenyu and Xu, Shang and Wei, Jianwei and Wang, Guanzhong and Dang, Qingqing and Liu, Yi and Chen, Jie},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year={2024}
+}
+```
+
+### YOLO (Ultralytics)
+```bibtex
+@software{jocher2023ultralytics,
+  title={Ultralytics YOLO},
+  author={Jocher, Glenn and Chaurasia, Ayush and Qiu, Jing},
+  year={2023},
+  url={https://github.com/ultralytics/ultralytics}
 }
 ```
 
