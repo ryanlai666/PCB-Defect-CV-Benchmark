@@ -289,7 +289,7 @@ PCB_wafer_defect_detection/
 
 ---
 
-## Citation
+## References
 
 If you use this benchmark or the models in your work, please refer to the corresponding publications:
 
