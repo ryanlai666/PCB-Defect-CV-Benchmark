@@ -262,7 +262,7 @@ PCB_wafer_defect_detection/
 
 ## References
 
-If you use this benchmark or the models in your work, please refer to the corresponding publications:
+This work have utlized below models and some of pretrain weight and tune on all paramters, please refer to the corresponding publications:
 
 ### DEIMv2 & DINOv3
 ```bibtex
