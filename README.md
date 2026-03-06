@@ -252,7 +252,7 @@ PCB_wafer_defect_detection/
 ├── REPORT.md                        ← final results report
 ├── DEIMv2/                          ← external repo (not in git)
 ├── dinov3/                          ← external repo (not in git)
-├── DeepPCB/                         ← dataset (not in git)
+├── DeepPCB/                         ← dataset (in DeepPCB project located within https://github.com/tangsanli5201/DeepPCB).
 ├── outputs/                         ← training outputs (not in git)
 ├── results/                         ← evaluation results (not in git)
 └── _archive/                        ← old/unused files (not in git)
